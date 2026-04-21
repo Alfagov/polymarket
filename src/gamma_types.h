@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include <boost/describe.hpp>
+#include <boost/json.hpp>
 #include <boost/url.hpp>
 
 #include "url_utils.h"
@@ -161,6 +162,7 @@ namespace polymarket::gamma {
     // ---------------------------------------------------------------------------
 
     struct Event;
+    struct Market;
 
     struct Series {
         std::string  id;
@@ -270,7 +272,7 @@ namespace polymarket::gamma {
         ImageOptimized featuredImageOptimized;
 
         std::vector<std::string> subEvents;
-        std::string              markets;          // schema says "<array>"; opaque
+        std::vector<Market>       markets;          // live API currently returns an array here
         std::vector<Series>      series;
         std::vector<Category>    categories;
         std::vector<Collection>  collections;

@@ -17,6 +17,19 @@ using polymarket::test::CannedResponse;
 using polymarket::test::CapturedRequest;
 using polymarket::test::MockHttpServer;
 
+constexpr int kLiveEventId = 2890;
+constexpr std::string_view kLiveEventSlug =
+    "nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup";
+constexpr std::string_view kLiveMarketId = "239826";
+
+constexpr std::string_view kLiveEventResponse = R"json({"id":"2890","ticker":"nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup","slug":"nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup","title":"NBA: Will the Mavericks beat the Grizzlies by more than 5.5 points in their December 4 matchup?","description":"In the upcoming NBA game, scheduled for December 4:\n\nIf the Dallas Mavericks win by over 5.5 points, the market will resolve to \u201cYes\u201d.\n\nIf the Memphis Grizzlies lose by less than 5.5 points or win, the market will resolve \u201cNo.\u201d \n\nIf the game is not completed by December 11, 2021, the market will resolve 50-50.","resolutionSource":"https://www.nba.com/games","startDate":"2021-12-04T00:00:00Z","creationDate":"2021-12-04T00:00:00Z","endDate":"2021-12-04T00:00:00Z","image":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-543e7263-67da-4905-8732-cd3f220ae751.png","icon":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-543e7263-67da-4905-8732-cd3f220ae751.png","active":true,"closed":true,"archived":false,"new":false,"featured":false,"restricted":false,"liquidity":0,"volume":1335.05,"openInterest":0,"sortBy":"ascending","category":"Sports","published_at":"2022-07-27 14:40:02.064+00","createdAt":"2022-07-27T14:40:02.074Z","updatedAt":"2026-04-15T17:43:00.69317Z","competitive":0,"volume24hr":0,"volume1wk":0,"volume1mo":0,"volume1yr":0,"liquidityAmm":0,"liquidityClob":0,"commentCount":8125,"markets":[{"id":"239826","question":"NBA: Will the Mavericks beat the Grizzlies by more than 5.5 points in their December 4 matchup?","conditionId":"0x064d33e3f5703792aafa92bfb0ee10e08f461b1b34c02c1f02671892ede1609a","slug":"nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup","resolutionSource":"https://www.nba.com/games","endDate":"2021-12-04T00:00:00Z","category":"Sports","liquidity":"50.000009","startDate":"2021-12-04T19:35:03.796Z","fee":"20000000000000000","image":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-aa2992d1-38df-404a-9190-49a909775014.png","icon":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-aa2992d1-38df-404a-9190-49a909775014.png","description":"In the upcoming NBA game, scheduled for December 4:\n\nIf the Dallas Mavericks win by over 5.5 points, the market will resolve to \u201cYes\u201d.\n\nIf the Memphis Grizzlies lose by less than 5.5 points or win, the market will resolve \u201cNo.\u201d \n\nIf the game is not completed by December 11, 2021, the market will resolve 50-50.","outcomes":"[\"Yes\", \"No\"]","outcomePrices":"[\"0.0000004113679809846114013590098187297978\", \"0.9999995886320190153885986409901813\"]","volume":"1335.045385","active":true,"marketType":"normal","closed":true,"marketMakerAddress":"0x9c568Ce9a316e7CF9bCCA352b409dfDdCD9b2C08","updatedBy":15,"createdAt":"2021-12-04T10:33:13.541Z","updatedAt":"2024-04-24T23:35:51.063381Z","closedTime":"2021-12-05 20:37:01+00","wideFormat":false,"new":false,"sentDiscord":false,"featured":false,"submitted_by":"0x790A4485e5198763C0a34272698ed0cd9506949B","twitterCardLocation":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup.png?1638736245595","twitterCardLastRefreshed":"1638736245595","archived":false,"resolvedBy":"0x0dD333859cF16942dd333D7570D839b8946Ac221","restricted":false,"volumeNum":1335.05,"liquidityNum":50,"endDateIso":"2021-12-04","startDateIso":"2021-12-04","hasReviewedDates":true,"readyForCron":true,"volume24hr":0,"volume1wk":0,"volume1mo":0,"volume1yr":0,"clobTokenIds":"[\"28182404005967940652495463228537840901055649726248190462854914416579180110833\", \"47044845753450022047436429968808601130811164131571549682541703866165095016290\"]","fpmmLive":true,"volume1wkAmm":0,"volume1moAmm":0,"volume1yrAmm":0,"volume1wkClob":0,"volume1moClob":0,"volume1yrClob":0,"creator":"","ready":false,"funded":false,"cyom":false,"competitive":0,"pagerDutyNotificationEnabled":false,"approved":true,"rewardsMinSize":0,"rewardsMaxSpread":0,"spread":1,"oneDayPriceChange":0,"oneHourPriceChange":0,"oneWeekPriceChange":0,"oneMonthPriceChange":0,"oneYearPriceChange":0,"lastTradePrice":0,"bestBid":0,"bestAsk":1,"clearBookOnStart":true,"manualActivation":false,"negRiskOther":false,"umaResolutionStatuses":"[]","pendingDeployment":false,"deploying":false,"rfqEnabled":false,"holdingRewardsEnabled":false,"feesEnabled":false,"requiresTranslation":false,"feeType":null}],"series":[{"id":"2","ticker":"nba","slug":"nba","title":"NBA","seriesType":"single","recurrence":"daily","image":"https://polymarket-upload.s3.us-east-2.amazonaws.com/super+cool+basketball+in+red+and+blue+wow.png","icon":"https://polymarket-upload.s3.us-east-2.amazonaws.com/super+cool+basketball+in+red+and+blue+wow.png","layout":"default","active":true,"closed":false,"archived":false,"new":false,"featured":false,"restricted":true,"publishedAt":"2023-01-30 17:13:39.006+00","createdBy":"15","updatedBy":"15","createdAt":"2022-10-13T00:36:01.131Z","updatedAt":"2026-04-21T20:27:45.300704Z","commentsEnabled":false,"competitive":"0","volume24hr":11.073004,"startDate":"2021-01-01T17:00:00Z","commentCount":6274,"requiresTranslation":false}],"tags":[{"id":"100215","label":"All","slug":"all","forceShow":false,"updatedAt":"2026-04-17T20:23:54.340488Z","requiresTranslation":false}],"cyom":false,"closedTime":"2022-07-27T14:40:02.074Z","showAllOutcomes":false,"showMarketImages":true,"enableNegRisk":false,"seriesSlug":"nba","negRiskAugmented":false,"pendingDeployment":false,"deploying":false,"requiresTranslation":false,"eventMetadata":{"context_requires_regen":true}})json";
+constexpr std::string_view kLiveEventTagsResponse =
+    R"json([{"id":"100215","label":"All","slug":"all","forceShow":false,"updatedAt":"2026-04-17T20:23:54.340488Z","requiresTranslation":false}])json";
+constexpr std::string_view kLiveMarketResponse = R"json({"id":"239826","question":"NBA: Will the Mavericks beat the Grizzlies by more than 5.5 points in their December 4 matchup?","conditionId":"0x064d33e3f5703792aafa92bfb0ee10e08f461b1b34c02c1f02671892ede1609a","slug":"nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup","resolutionSource":"https://www.nba.com/games","endDate":"2021-12-04T00:00:00Z","category":"Sports","liquidity":"50.000009","startDate":"2021-12-04T19:35:03.796Z","fee":"20000000000000000","image":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-aa2992d1-38df-404a-9190-49a909775014.png","icon":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-aa2992d1-38df-404a-9190-49a909775014.png","description":"In the upcoming NBA game, scheduled for December 4:\n\nIf the Dallas Mavericks win by over 5.5 points, the market will resolve to \u201cYes\u201d.\n\nIf the Memphis Grizzlies lose by less than 5.5 points or win, the market will resolve \u201cNo.\u201d \n\nIf the game is not completed by December 11, 2021, the market will resolve 50-50.","outcomes":"[\"Yes\", \"No\"]","outcomePrices":"[\"0.0000004113679809846114013590098187297978\", \"0.9999995886320190153885986409901813\"]","volume":"1335.045385","active":true,"marketType":"normal","closed":true,"marketMakerAddress":"0x9c568Ce9a316e7CF9bCCA352b409dfDdCD9b2C08","updatedBy":15,"createdAt":"2021-12-04T10:33:13.541Z","updatedAt":"2024-04-24T23:35:51.063381Z","closedTime":"2021-12-05 20:37:01+00","wideFormat":false,"new":false,"sentDiscord":false,"featured":false,"submitted_by":"0x790A4485e5198763C0a34272698ed0cd9506949B","twitterCardLocation":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup.png?1638736245595","twitterCardLastRefreshed":"1638736245595","archived":false,"resolvedBy":"0x0dD333859cF16942dd333D7570D839b8946Ac221","restricted":false,"volumeNum":1335.05,"liquidityNum":50,"endDateIso":"2021-12-04","startDateIso":"2021-12-04","hasReviewedDates":true,"readyForCron":true,"volume24hr":0,"volume1wk":0,"volume1mo":0,"volume1yr":0,"clobTokenIds":"[\"28182404005967940652495463228537840901055649726248190462854914416579180110833\", \"47044845753450022047436429968808601130811164131571549682541703866165095016290\"]","fpmmLive":true,"volume1wkAmm":0,"volume1moAmm":0,"volume1yrAmm":0,"volume1wkClob":0,"volume1moClob":0,"volume1yrClob":0,"creator":"","ready":false,"funded":false,"cyom":false,"competitive":0,"pagerDutyNotificationEnabled":false,"approved":true,"rewardsMinSize":0,"rewardsMaxSpread":0,"spread":1,"oneDayPriceChange":0,"oneHourPriceChange":0,"oneWeekPriceChange":0,"oneMonthPriceChange":0,"oneYearPriceChange":0,"lastTradePrice":0,"bestBid":0,"bestAsk":1,"clearBookOnStart":true,"manualActivation":false,"negRiskOther":false,"umaResolutionStatuses":"[]","pendingDeployment":false,"deploying":false,"rfqEnabled":false,"holdingRewardsEnabled":false,"feesEnabled":false,"requiresTranslation":false,"feeType":null})json";
+constexpr std::string_view kLiveMarketBySlugResponse = R"json({"id":"239826","question":"NBA: Will the Mavericks beat the Grizzlies by more than 5.5 points in their December 4 matchup?","conditionId":"0x064d33e3f5703792aafa92bfb0ee10e08f461b1b34c02c1f02671892ede1609a","slug":"nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup","resolutionSource":"https://www.nba.com/games","endDate":"2021-12-04T00:00:00Z","category":"Sports","liquidity":"50.000009","startDate":"2021-12-04T19:35:03.796Z","fee":"20000000000000000","image":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-aa2992d1-38df-404a-9190-49a909775014.png","icon":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-aa2992d1-38df-404a-9190-49a909775014.png","description":"In the upcoming NBA game, scheduled for December 4:\n\nIf the Dallas Mavericks win by over 5.5 points, the market will resolve to \u201cYes\u201d.\n\nIf the Memphis Grizzlies lose by less than 5.5 points or win, the market will resolve \u201cNo.\u201d \n\nIf the game is not completed by December 11, 2021, the market will resolve 50-50.","outcomes":"[\"Yes\", \"No\"]","outcomePrices":"[\"0.0000004113679809846114013590098187297978\", \"0.9999995886320190153885986409901813\"]","volume":"1335.045385","active":true,"marketType":"normal","closed":true,"marketMakerAddress":"0x9c568Ce9a316e7CF9bCCA352b409dfDdCD9b2C08","updatedBy":15,"createdAt":"2021-12-04T10:33:13.541Z","updatedAt":"2024-04-24T23:35:51.063381Z","closedTime":"2021-12-05 20:37:01+00","wideFormat":false,"new":false,"sentDiscord":false,"featured":false,"submitted_by":"0x790A4485e5198763C0a34272698ed0cd9506949B","twitterCardLocation":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup.png?1638736245595","twitterCardLastRefreshed":"1638736245595","archived":false,"resolvedBy":"0x0dD333859cF16942dd333D7570D839b8946Ac221","restricted":false,"volumeNum":1335.05,"liquidityNum":50,"endDateIso":"2021-12-04","startDateIso":"2021-12-04","hasReviewedDates":true,"readyForCron":true,"volume24hr":0,"volume1wk":0,"volume1mo":0,"volume1yr":0,"clobTokenIds":"[\"28182404005967940652495463228537840901055649726248190462854914416579180110833\", \"47044845753450022047436429968808601130811164131571549682541703866165095016290\"]","fpmmLive":true,"volume1wkAmm":0,"volume1moAmm":0,"volume1yrAmm":0,"volume1wkClob":0,"volume1moClob":0,"volume1yrClob":0,"events":[{"id":"2890","ticker":"nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup","slug":"nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup","title":"NBA: Will the Mavericks beat the Grizzlies by more than 5.5 points in their December 4 matchup?","description":"In the upcoming NBA game, scheduled for December 4:\n\nIf the Dallas Mavericks win by over 5.5 points, the market will resolve to \u201cYes\u201d.\n\nIf the Memphis Grizzlies lose by less than 5.5 points or win, the market will resolve \u201cNo.\u201d \n\nIf the game is not completed by December 11, 2021, the market will resolve 50-50.","resolutionSource":"https://www.nba.com/games","startDate":"2021-12-04T00:00:00Z","creationDate":"2021-12-04T00:00:00Z","endDate":"2021-12-04T00:00:00Z","image":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-543e7263-67da-4905-8732-cd3f220ae751.png","icon":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-543e7263-67da-4905-8732-cd3f220ae751.png","active":true,"closed":true,"archived":false,"new":false,"featured":false,"restricted":false,"liquidity":0,"volume":1335.05,"openInterest":0,"sortBy":"ascending","category":"Sports","published_at":"2022-07-27 14:40:02.064+00","createdAt":"2022-07-27T14:40:02.074Z","updatedAt":"2026-04-15T17:43:00.69317Z","competitive":0,"volume24hr":0,"volume1wk":0,"volume1mo":0,"volume1yr":0,"liquidityAmm":0,"liquidityClob":0,"commentCount":8125,"cyom":false,"closedTime":"2022-07-27T14:40:02.074Z","showAllOutcomes":false,"showMarketImages":true,"enableNegRisk":false,"seriesSlug":"nba","negRiskAugmented":false,"pendingDeployment":false,"deploying":false,"requiresTranslation":false,"eventMetadata":{"context_requires_regen":true}}],"creator":"","ready":false,"funded":false,"cyom":false,"competitive":0,"pagerDutyNotificationEnabled":false,"approved":true,"rewardsMinSize":0,"rewardsMaxSpread":0,"spread":1,"oneDayPriceChange":0,"oneHourPriceChange":0,"oneWeekPriceChange":0,"oneMonthPriceChange":0,"oneYearPriceChange":0,"lastTradePrice":0,"bestBid":0,"bestAsk":1,"clearBookOnStart":true,"manualActivation":false,"negRiskOther":false,"umaResolutionStatuses":"[]","pendingDeployment":false,"deploying":false,"rfqEnabled":false,"holdingRewardsEnabled":false,"feesEnabled":false,"requiresTranslation":false,"feeType":null})json";
+constexpr std::string_view kLiveMarketTagsResponse =
+    R"json([{"id":"100215","label":"All","slug":"all","forceShow":false,"updatedAt":"2026-04-17T20:23:54.340488Z","requiresTranslation":false}])json";
+
 class GammaClientTest : public ::testing::Test {
 protected:
     void SetUp() override {
@@ -114,35 +127,35 @@ TEST_F(GammaClientTest, FetchAllEventsStopsOnEmptyPage) {
 }
 
 TEST_F(GammaClientTest, FetchEventByIdHitsCorrectPath) {
-    server_.enqueue({200, R"({"id":"42","slug":"life"})"});
+    server_.enqueue({200, std::string(kLiveEventResponse)});
 
-    auto ev = client_->fetch_event_by_id(42);
+    auto ev = client_->fetch_event_by_id(kLiveEventId);
 
-    EXPECT_EQ(ev.id, "42");
-    EXPECT_EQ(ev.slug, "life");
-    EXPECT_EQ(server_.last_request().target, "/events/42");
+    EXPECT_EQ(ev.id, std::to_string(kLiveEventId));
+    EXPECT_EQ(ev.slug, kLiveEventSlug);
+    EXPECT_EQ(server_.last_request().target, "/events/2890");
 }
 
 TEST_F(GammaClientTest, FetchEventBySlugHitsCorrectPath) {
-    server_.enqueue({200, R"({"id":"7","slug":"will-it-rain"})"});
+    server_.enqueue({200, std::string(kLiveEventResponse)});
 
-    auto ev = client_->fetch_event_by_slug("will-it-rain");
+    auto ev = client_->fetch_event_by_slug(std::string(kLiveEventSlug));
 
-    EXPECT_EQ(ev.id, "7");
-    EXPECT_EQ(server_.last_request().target, "/events/slug/will-it-rain");
+    EXPECT_EQ(ev.id, std::to_string(kLiveEventId));
+    EXPECT_EQ(ev.slug, kLiveEventSlug);
+    EXPECT_EQ(server_.last_request().target,
+              "/events/slug/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup");
 }
 
 TEST_F(GammaClientTest, FetchEventsTagsHitsCorrectPathAndParses) {
-    server_.enqueue({200,
-                     R"([{"id":"10","label":"Politics","slug":"politics"},
-                         {"id":"11","label":"Sports","slug":"sports"}])"});
+    server_.enqueue({200, std::string(kLiveEventTagsResponse)});
 
-    auto tags = client_->fetch_events_tags(99);
+    auto tags = client_->fetch_events_tags(kLiveEventId);
 
-    ASSERT_EQ(tags.size(), 2u);
-    EXPECT_EQ(tags[0].label, "Politics");
-    EXPECT_EQ(tags[1].slug, "sports");
-    EXPECT_EQ(server_.last_request().target, "/events/99/tags");
+    ASSERT_EQ(tags.size(), 1u);
+    EXPECT_EQ(tags[0].label, "All");
+    EXPECT_EQ(tags[0].slug, "all");
+    EXPECT_EQ(server_.last_request().target, "/events/2890/tags");
 }
 
 TEST_F(GammaClientTest, FetchEventByIdThrowsOn404) {
@@ -189,31 +202,35 @@ TEST_F(GammaClientTest, FetchAllMarketsPaginates) {
 }
 
 TEST_F(GammaClientTest, FetchMarketByIdHitsPath) {
-    server_.enqueue({200, R"({"id":"0xabc","slug":"trump"})"});
+    server_.enqueue({200, std::string(kLiveMarketResponse)});
 
-    auto m = client_->fetch_market_by_id("0xabc");
+    auto m = client_->fetch_market_by_id(std::string(kLiveMarketId));
 
-    EXPECT_EQ(m.id, "0xabc");
-    EXPECT_EQ(server_.last_request().target, "/markets/0xabc");
+    EXPECT_EQ(m.id, kLiveMarketId);
+    EXPECT_EQ(m.slug, kLiveEventSlug);
+    EXPECT_EQ(server_.last_request().target, "/markets/239826");
 }
 
 TEST_F(GammaClientTest, FetchMarketBySlugHitsPath) {
-    server_.enqueue({200, R"({"id":"m","slug":"foo"})"});
+    server_.enqueue({200, std::string(kLiveMarketBySlugResponse)});
 
-    auto m = client_->fetch_market_by_slug("foo");
+    auto m = client_->fetch_market_by_slug(std::string(kLiveEventSlug));
 
-    EXPECT_EQ(m.slug, "foo");
-    EXPECT_EQ(server_.last_request().target, "/markets/slug/foo");
+    EXPECT_EQ(m.id, kLiveMarketId);
+    EXPECT_EQ(m.slug, kLiveEventSlug);
+    EXPECT_EQ(server_.last_request().target,
+              "/markets/slug/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup");
 }
 
 TEST_F(GammaClientTest, FetchMarketTagsByIdParsesTags) {
-    server_.enqueue({200, R"([{"id":"1","label":"A","slug":"a"}])"});
+    server_.enqueue({200, std::string(kLiveMarketTagsResponse)});
 
-    auto tags = client_->fetch_market_tags_by_id("mkt1");
+    auto tags = client_->fetch_market_tags_by_id(std::string(kLiveMarketId));
 
     ASSERT_EQ(tags.size(), 1u);
-    EXPECT_EQ(tags[0].label, "A");
-    EXPECT_EQ(server_.last_request().target, "/markets/mkt1/tags");
+    EXPECT_EQ(tags[0].label, "All");
+    EXPECT_EQ(tags[0].slug, "all");
+    EXPECT_EQ(server_.last_request().target, "/markets/239826/tags");
 }
 
 // ---------------------------------------------------------------------------
@@ -283,26 +300,26 @@ TEST_F(GammaClientTest, DataApiCallDoesNotCorruptBaseUrlOnSuccess) {
     // Both point to the same mock, but the test still validates that a
     // subsequent /events path is reachable and reaches a /events/... target.
     server_.enqueue({200, R"([])"});              // holders
-    server_.enqueue({200, R"({"id":"1"})"});      // event-by-id
+    server_.enqueue({200, std::string(kLiveEventResponse)});      // event-by-id
 
     client_->fetch_market_top_holders({"tok"});
-    auto ev = client_->fetch_event_by_id(1);
+    auto ev = client_->fetch_event_by_id(kLiveEventId);
 
-    EXPECT_EQ(ev.id, "1");
+    EXPECT_EQ(ev.id, std::to_string(kLiveEventId));
     ASSERT_EQ(server_.request_count(), 2u);
-    EXPECT_EQ(server_.requests()[1].target, "/events/1");
+    EXPECT_EQ(server_.requests()[1].target, "/events/2890");
 }
 
 TEST_F(GammaClientTest, DataApiCallDoesNotCorruptBaseUrlOnFailure) {
     server_.enqueue({502, "bad gateway"});        // holders fails
-    server_.enqueue({200, R"({"id":"9"})"});      // event-by-id succeeds
+    server_.enqueue({200, std::string(kLiveEventResponse)});      // event-by-id succeeds
 
     EXPECT_THROW(client_->fetch_market_top_holders({"tok"}), std::runtime_error);
 
-    auto ev = client_->fetch_event_by_id(9);
-    EXPECT_EQ(ev.id, "9");
+    auto ev = client_->fetch_event_by_id(kLiveEventId);
+    EXPECT_EQ(ev.id, std::to_string(kLiveEventId));
     ASSERT_EQ(server_.request_count(), 2u);
-    EXPECT_EQ(server_.requests()[1].target, "/events/9");
+    EXPECT_EQ(server_.requests()[1].target, "/events/2890");
 }
 
 // ---------------------------------------------------------------------------
