@@ -587,7 +587,7 @@ namespace polymarket::gamma {
     };
     BOOST_DESCRIBE_STRUCT(EventVolume, (), (total, markets))
 
-    struct Parameters {
+    struct MarketParameters {
         int limit = 1000;
         std::vector<std::string> order;
         std::optional<bool> ascending;
@@ -609,6 +609,64 @@ namespace polymarket::gamma {
         std::optional<bool> related_tags;
         std::string game_id;
         std::optional<bool> include_tag;
+    };
+
+    struct EventParameters {
+        int limit = 20;
+        std::string order;
+        std::optional<bool> ascending = true;
+        std::string after_cursor;
+
+        std::vector<int> id;
+        std::vector<std::string> slug;
+
+        // Status Flags
+        std::optional<bool> closed;
+        std::optional<bool> live;
+        std::optional<bool> featured;
+        std::optional<bool> cyom;
+
+        // Search & Metrics
+        std::string title_search;
+        std::optional<double> liquidity_min;
+        std::optional<double> liquidity_max;
+        std::optional<double> volume_min;
+        std::optional<double> volume_max;
+
+        // Dates & Times (ISO 8601 Strings)
+        std::string start_date_min;
+        std::string start_date_max;
+        std::string end_date_min;
+        std::string end_date_max;
+        std::string start_time_min;
+        std::string start_time_max;
+        std::string event_date;
+
+        // Tags & Groupings
+        std::vector<int> tag_id;
+        std::string tag_slug;
+        std::vector<int> exclude_tag_id; // Cannot overlap with tag_id
+        std::optional<bool> related_tags;
+        std::string tag_match;
+        std::vector<int> series_id;
+        std::vector<int> game_id;
+
+        // Event Specifics
+        std::optional<int> event_week;
+        std::optional<bool> featured_order;
+        std::string recurrence;
+        std::vector<std::string> created_by;
+        std::optional<int> parent_event_id;
+        std::optional<bool> include_children;
+        std::string partner_slug;
+
+        // Relation Inclusions
+        std::optional<bool> include_chat;
+        std::optional<bool> include_template;
+        std::optional<bool> include_best_lines;
+
+        // Localization
+        std::string locale;
     };
 
 

@@ -22,7 +22,7 @@ namespace polymarket::gamma {
     }
 
     // Returns without initial "?"
-    std::string GammaClient::build_query_string(const Parameters& p) {
+    std::string GammaClient::build_market_query_string(const MarketParameters& p) {
         boost::urls::url url;
 
         url.params().append({"limit", std::to_string(p.limit)});
@@ -74,10 +74,70 @@ namespace polymarket::gamma {
         return query_string;
     }
 
-    std::vector<Event> GammaClient::fetch_events(const Parameters &params, const std::string &cursor) {
+    std::string GammaClient::build_event_query_string(const EventParameters& p) {
+        boost::urls::url url;
+
+        // --- Pagination (Required) ---
+        url.params().append({"limit", std::to_string(p.limit)});
+
+        // --- Strings (!empty checks) ---
+        if (!p.order.empty()) url.params().append({"order", p.order});
+        if (!p.after_cursor.empty()) url.params().append({"after_cursor", p.after_cursor});
+        if (!p.title_search.empty()) url.params().append({"title_search", p.title_search});
+        if (!p.start_date_min.empty()) url.params().append({"start_date_min", p.start_date_min});
+        if (!p.start_date_max.empty()) url.params().append({"start_date_max", p.start_date_max});
+        if (!p.end_date_min.empty()) url.params().append({"end_date_min", p.end_date_min});
+        if (!p.end_date_max.empty()) url.params().append({"end_date_max", p.end_date_max});
+        if (!p.start_time_min.empty()) url.params().append({"start_time_min", p.start_time_min});
+        if (!p.start_time_max.empty()) url.params().append({"start_time_max", p.start_time_max});
+        if (!p.event_date.empty()) url.params().append({"event_date", p.event_date});
+        if (!p.tag_slug.empty()) url.params().append({"tag_slug", p.tag_slug});
+        if (!p.tag_match.empty()) url.params().append({"tag_match", p.tag_match});
+        if (!p.recurrence.empty()) url.params().append({"recurrence", p.recurrence});
+        if (!p.partner_slug.empty()) url.params().append({"partner_slug", p.partner_slug});
+        if (!p.locale.empty()) url.params().append({"locale", p.locale});
+
+        // --- Vectors (Joined by Commas) ---
+        // Note: Ensure your `join_vector` helper is a template or is overloaded
+        // to handle both std::vector<int> and std::vector<std::string>.
+        if (!p.id.empty()) url.params().append({"id", join_vector(p.id)});
+        if (!p.slug.empty()) url.params().append({"slug", join_vector(p.slug)});
+        if (!p.tag_id.empty()) url.params().append({"tag_id", join_vector(p.tag_id)});
+        if (!p.exclude_tag_id.empty()) url.params().append({"exclude_tag_id", join_vector(p.exclude_tag_id)});
+        if (!p.series_id.empty()) url.params().append({"series_id", join_vector(p.series_id)});
+        if (!p.game_id.empty()) url.params().append({"game_id", join_vector(p.game_id)});
+        if (!p.created_by.empty()) url.params().append({"created_by", join_vector(p.created_by)});
+
+        // --- Optionals (Bools) ---
+        if (p.ascending.has_value()) url.params().append({"ascending", p.ascending.value() ? "true" : "false"});
+        if (p.closed.has_value()) url.params().append({"closed", p.closed.value() ? "true" : "false"});
+        if (p.live.has_value()) url.params().append({"live", p.live.value() ? "true" : "false"});
+        if (p.featured.has_value()) url.params().append({"featured", p.featured.value() ? "true" : "false"});
+        if (p.cyom.has_value()) url.params().append({"cyom", p.cyom.value() ? "true" : "false"});
+        if (p.related_tags.has_value()) url.params().append({"related_tags", p.related_tags.value() ? "true" : "false"});
+        if (p.featured_order.has_value()) url.params().append({"featured_order", p.featured_order.value() ? "true" : "false"});
+        if (p.include_children.has_value()) url.params().append({"include_children", p.include_children.value() ? "true" : "false"});
+        if (p.include_chat.has_value()) url.params().append({"include_chat", p.include_chat.value() ? "true" : "false"});
+        if (p.include_template.has_value()) url.params().append({"include_template", p.include_template.value() ? "true" : "false"});
+        if (p.include_best_lines.has_value()) url.params().append({"include_best_lines", p.include_best_lines.value() ? "true" : "false"});
+
+        // --- Optionals (Numbers) ---
+        if (p.liquidity_min.has_value()) url.params().append({"liquidity_min", std::to_string(p.liquidity_min.value())});
+        if (p.liquidity_max.has_value()) url.params().append({"liquidity_max", std::to_string(p.liquidity_max.value())});
+        if (p.volume_min.has_value()) url.params().append({"volume_min", std::to_string(p.volume_min.value())});
+        if (p.volume_max.has_value()) url.params().append({"volume_max", std::to_string(p.volume_max.value())});
+        if (p.event_week.has_value()) url.params().append({"event_week", std::to_string(p.event_week.value())});
+        if (p.parent_event_id.has_value()) url.params().append({"parent_event_id", std::to_string(p.parent_event_id.value())});
+
+        std::string query_string = static_cast<std::string>(url.encoded_query());
+
+        return query_string;
+    }
+
+    std::vector<Event> GammaClient::fetch_events(const EventParameters &params, const std::string &cursor) {
         std::vector<Event> events;
         std::string path = std::format("/events/keyset?{}",
-            build_query_string(params));
+            build_event_query_string(params));
 
         if (!cursor.empty()) {
             path += "&after_cursor=" + cursor;
@@ -90,13 +150,13 @@ namespace polymarket::gamma {
         return parse_events_response(response.body).events;
     }
 
-    std::vector<Event> GammaClient::fetch_all_events(const Parameters &params) {
+    std::vector<Event> GammaClient::fetch_all_events(const EventParameters &params) {
         std::vector<Event> events;
         std::string cursor = "";
 
         while (true) {
             std::string path = std::format("/events/keyset?{}",
-                               build_query_string(params));
+                               build_event_query_string(params));
 
             if (!cursor.empty()) {
                 path += "&after_cursor=" + cursor;
@@ -156,11 +216,11 @@ namespace polymarket::gamma {
         return json::value_to<std::vector<Tag>>(json::parse(response.body));
     }
 
-    std::vector<Market> GammaClient::fetch_markets(const Parameters &params, const std::string &cursor) {
+    std::vector<Market> GammaClient::fetch_markets(const MarketParameters &params, const std::string &cursor) {
         std::vector<Market> markets;
 
         std::string path = std::format("/markets/keyset?{}",
-                               build_query_string(params));
+                               build_market_query_string(params));
 
         if (!cursor.empty()) {
             path += "&after_cursor=" + cursor;
@@ -173,13 +233,13 @@ namespace polymarket::gamma {
         return parse_markets_response(response.body).markets;
     }
 
-    std::vector<Market> GammaClient::fetch_all_markets(const Parameters &params) {
+    std::vector<Market> GammaClient::fetch_all_markets(const MarketParameters &params) {
         std::vector<Market> markets;
         std::string cursor = "";
 
         while (true) {
             std::string path = std::format("/markets/keyset?{}",
-                               build_query_string(params));
+                               build_market_query_string(params));
 
             if (!cursor.empty()) {
                 path += "&after_cursor=" + cursor;

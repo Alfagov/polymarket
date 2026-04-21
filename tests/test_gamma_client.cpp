@@ -12,7 +12,8 @@ namespace {
 
 using polymarket::APIConfig;
 using polymarket::gamma::GammaClient;
-using polymarket::gamma::Parameters;
+using polymarket::gamma::MarketParameters;
+using polymarket::gamma::EventParameters;
 using polymarket::test::CannedResponse;
 using polymarket::test::CapturedRequest;
 using polymarket::test::MockHttpServer;
@@ -61,7 +62,7 @@ protected:
 TEST_F(GammaClientTest, FetchEventsReturnsParsedEventsFromArrayBody) {
     server_.enqueue({200, R"([{"id":"1","slug":"a"},{"id":"2","slug":"b"}])"});
 
-    Parameters p;
+    EventParameters p;
     auto events = client_->fetch_events(p);
 
     ASSERT_EQ(events.size(), 2u);
@@ -72,13 +73,13 @@ TEST_F(GammaClientTest, FetchEventsReturnsParsedEventsFromArrayBody) {
     const auto& req = server_.last_request();
     EXPECT_EQ(req.method, "GET");
     EXPECT_TRUE(target_has(req.target, "/events/keyset"));
-    EXPECT_TRUE(target_has(req.target, "limit=1000"));
+    EXPECT_TRUE(target_has(req.target, "limit=20"));
 }
 
 TEST_F(GammaClientTest, FetchEventsAppendsAfterCursorWhenProvided) {
     server_.enqueue({200, R"([])"});
 
-    Parameters p;
+    EventParameters p;
     client_->fetch_events(p, "abc123");
 
     const auto& req = server_.last_request();
@@ -89,7 +90,7 @@ TEST_F(GammaClientTest, FetchEventsAppendsAfterCursorWhenProvided) {
 TEST_F(GammaClientTest, FetchEventsThrowsOnNon2xxStatus) {
     server_.enqueue({500, R"({"error":"boom"})"});
 
-    Parameters p;
+    EventParameters p;
     EXPECT_THROW(client_->fetch_events(p), std::runtime_error);
 }
 
@@ -107,7 +108,7 @@ TEST_F(GammaClientTest, FetchAllEventsPaginatesViaNextCursor) {
         return {500, "{}"};
     });
 
-    Parameters p;
+    EventParameters p;
     auto events = client_->fetch_all_events(p);
 
     ASSERT_EQ(events.size(), 2u);
@@ -119,7 +120,7 @@ TEST_F(GammaClientTest, FetchAllEventsPaginatesViaNextCursor) {
 TEST_F(GammaClientTest, FetchAllEventsStopsOnEmptyPage) {
     server_.enqueue({200, R"({"events":[],"next_cursor":"ignored"})"});
 
-    Parameters p;
+    EventParameters p;
     auto events = client_->fetch_all_events(p);
 
     EXPECT_TRUE(events.empty());
@@ -170,7 +171,7 @@ TEST_F(GammaClientTest, FetchEventByIdThrowsOn404) {
 TEST_F(GammaClientTest, FetchMarketsParsesArrayBody) {
     server_.enqueue({200, R"([{"id":"m1","slug":"s1"}])"});
 
-    Parameters p;
+    MarketParameters p;
     auto markets = client_->fetch_markets(p);
 
     ASSERT_EQ(markets.size(), 1u);
@@ -181,7 +182,7 @@ TEST_F(GammaClientTest, FetchMarketsParsesArrayBody) {
 TEST_F(GammaClientTest, FetchMarketsPassesCursor) {
     server_.enqueue({200, R"([])"});
 
-    Parameters p;
+    MarketParameters p;
     client_->fetch_markets(p, "cur42");
 
     EXPECT_TRUE(target_has(server_.last_request().target, "after_cursor=cur42"));
@@ -195,7 +196,7 @@ TEST_F(GammaClientTest, FetchAllMarketsPaginates) {
         return {500, "{}"};
     });
 
-    Parameters p;
+    MarketParameters p;
     auto markets = client_->fetch_all_markets(p);
     EXPECT_EQ(markets.size(), 3u);
     EXPECT_EQ(server_.request_count(), 2u);
@@ -329,21 +330,18 @@ TEST_F(GammaClientTest, DataApiCallDoesNotCorruptBaseUrlOnFailure) {
 TEST_F(GammaClientTest, ParametersAreSerializedIntoQueryString) {
     server_.enqueue({200, R"([])"});
 
-    Parameters p;
+    EventParameters p;
     p.limit = 25;
     p.order = {"volume"};
     p.ascending = true;
     p.closed = false;
     p.slug = {"foo", "bar"};
     p.id = {1, 2, 3};
-    p.liquidity_num_min = 100;
-    p.volume_num_max = 9999;
+    p.liquidity_min = 100;
+    p.volume_max = 9999;
     p.start_date_min = "2026-01-01";
     p.end_date_max = "2026-12-31";
-    p.tag_id = {"politics"};
     p.related_tags = true;
-    p.include_tag = false;
-    p.game_id = "NBA-001";
 
     client_->fetch_events(p);
 
@@ -354,27 +352,24 @@ TEST_F(GammaClientTest, ParametersAreSerializedIntoQueryString) {
     EXPECT_TRUE(target_has(t, "closed=false")) << t;
     EXPECT_TRUE(target_has(t, "slug=foo,bar")) << t;
     EXPECT_TRUE(target_has(t, "id=1,2,3")) << t;
-    EXPECT_TRUE(target_has(t, "liquidity_num_min=100")) << t;
-    EXPECT_TRUE(target_has(t, "volume_num_max=9999")) << t;
+    EXPECT_TRUE(target_has(t, "liquidity_min=100")) << t;
+    EXPECT_TRUE(target_has(t, "volume_max=9999")) << t;
     EXPECT_TRUE(target_has(t, "start_date_min=2026-01-01")) << t;
     EXPECT_TRUE(target_has(t, "end_date_max=2026-12-31")) << t;
-    EXPECT_TRUE(target_has(t, "tag_id=politics")) << t;
     EXPECT_TRUE(target_has(t, "related_tags=true")) << t;
-    EXPECT_TRUE(target_has(t, "include_tag=false")) << t;
-    EXPECT_TRUE(target_has(t, "game_id=NBA-001")) << t;
 }
 
 TEST_F(GammaClientTest, OptionalParametersOmittedWhenUnset) {
     server_.enqueue({200, R"([])"});
 
-    Parameters p;  // defaults: only limit set
+    EventParameters p;  // defaults: only limit set
     client_->fetch_events(p);
 
     const auto& t = server_.last_request().target;
-    EXPECT_TRUE(target_has(t, "limit=1000"));
-    EXPECT_FALSE(target_has(t, "ascending="));
+    EXPECT_TRUE(target_has(t, "limit=20"));
+    EXPECT_TRUE(target_has(t, "ascending="));
     EXPECT_FALSE(target_has(t, "closed="));
-    EXPECT_FALSE(target_has(t, "liquidity_num_min="));
+    EXPECT_FALSE(target_has(t, "liquidity_min="));
     EXPECT_FALSE(target_has(t, "slug="));
     EXPECT_FALSE(target_has(t, "id="));
     EXPECT_FALSE(target_has(t, "start_date_min="));
@@ -386,7 +381,7 @@ TEST_F(GammaClientTest, OptionalParametersOmittedWhenUnset) {
 
 TEST_F(GammaClientTest, FetchAllMarketsPropagatesError) {
     server_.enqueue({503, "unavailable"});
-    Parameters p;
+    MarketParameters p;
     EXPECT_THROW(client_->fetch_all_markets(p), std::runtime_error);
 }
 
