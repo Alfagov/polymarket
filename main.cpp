@@ -1,5 +1,6 @@
 #include <iostream>
 
+#include "src/clob_client.h"
 #include "src/gamma_client.h"
 #include "src/types.h"
 #include "src/gamma_client.h"
@@ -21,6 +22,11 @@ int main() {
     mkts = client.fetch_markets(MarketParameters{.limit = 1}, "");
     std::cout << "TOTAL: " << mkts.size() << std::endl;
 
+
+    auto clob_client = clob::ClobClient(cfg);
+    auto time = clob_client.fetch_server_time();
+
+    std::cout << "TIME: " << time << std::endl;
 
     return 0;
 }

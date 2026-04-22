@@ -36,7 +36,10 @@ add_executable(polymarket main.cpp
         src/types.h
         src/gamma_types.h
         src/gamma_types_json.h
-        src/url_utils.h)
+        src/url_utils.h
+        src/clob_client.cpp
+        src/clob_client.h
+        src/clob_types.h)
 
 target_link_libraries(polymarket PRIVATE
         OpenSSL::SSL
@@ -68,7 +71,10 @@ if (POLYMARKET_BUILD_TESTS)
     add_executable(gamma_client_tests
             tests/test_gamma_client.cpp
             src/http_client.cpp
-            src/gamma_client.cpp)
+            src/gamma_client.cpp
+            src/clob_client.cpp
+            src/clob_client.h
+            src/clob_types.h)
 
     target_include_directories(gamma_client_tests PRIVATE src tests)
 
