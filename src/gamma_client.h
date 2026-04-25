@@ -33,6 +33,39 @@ namespace polymarket::gamma {
         std::vector<EventVolume> fetch_event_live_volumes(int event);
         std::vector<Tag> fetch_market_tags_by_id(const std::string &id);
 
+        // ---------------- Health ----------------
+        std::string fetch_status();
+
+        // ---------------- Teams / Sports ----------------
+        std::vector<Team>             fetch_teams(const TeamsRequest &req = {});
+        std::vector<SportsMetadata>   fetch_sports();
+        SportsMarketTypesResponse     fetch_sports_market_types();
+
+        // ---------------- Tags ----------------
+        std::vector<Tag>        fetch_tags(const TagsRequest &req = {});
+        Tag                     fetch_tag_by_id(const std::string &id);
+        Tag                     fetch_tag_by_slug(const std::string &slug);
+        std::vector<RelatedTag> fetch_related_tags_by_id(const std::string &id,
+                                                          const RelatedTagsRequest &req = {});
+        std::vector<RelatedTag> fetch_related_tags_by_slug(const std::string &slug,
+                                                            const RelatedTagsRequest &req = {});
+        std::vector<Tag>        fetch_tags_related_to_tag_by_id(const std::string &id,
+                                                                 const RelatedTagsRequest &req = {});
+        std::vector<Tag>        fetch_tags_related_to_tag_by_slug(const std::string &slug,
+                                                                   const RelatedTagsRequest &req = {});
+
+        // ---------------- Series ----------------
+        std::vector<Series> fetch_series(const SeriesListRequest &req = {});
+        Series              fetch_series_by_id(const std::string &id);
+
+        // ---------------- Comments ----------------
+        std::vector<Comment> fetch_comments(const CommentsRequest &req);
+        std::vector<Comment> fetch_comments_by_id(const std::string &id);
+        std::vector<Comment> fetch_comments_by_user_address(const std::string &user_address);
+
+        // ---------------- Public profile / search ----------------
+        PublicProfile fetch_public_profile(const std::string &address);
+        SearchResults fetch_public_search(const SearchRequest &req);
 
     private:
         APIConfig config_;

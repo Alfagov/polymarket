@@ -309,9 +309,6 @@ namespace polymarket::gamma {
         http_.set_base_url(config_.data_api_url);
         const std::string path = std::format("/oi?market={}", join_vector(market));
 
-        std::cout << market[0] << std::endl;
-        std::cout << path << std::endl;
-
         const auto response = http_.get(path);
         if (!response.ok()) {
             http_.set_base_url(config_.gamma_api_url);
@@ -386,5 +383,219 @@ namespace polymarket::gamma {
 
     std::vector<EventVolume> GammaClient::parse_event_live_volumes_response(const std::string &json_response) {
         return json::value_to<std::vector<EventVolume>>(json::parse(json_response));
+    }
+
+    // -----------------------------------------------------------------------
+    // New unauthenticated endpoints (parallel to Rust unauth client)
+    // -----------------------------------------------------------------------
+    namespace {
+        void append_opt_int(boost::urls::url &u, std::string_view k, const std::optional<int> &v) {
+            if (v) u.params().append({std::string(k), std::to_string(*v)});
+        }
+        void append_opt_bool(boost::urls::url &u, std::string_view k, const std::optional<bool> &v) {
+            if (v) u.params().append({std::string(k), *v ? "true" : "false"});
+        }
+        void append_str(boost::urls::url &u, std::string_view k, const std::string &v) {
+            if (!v.empty()) u.params().append({std::string(k), v});
+        }
+        template <class T>
+        void append_vec(boost::urls::url &u, std::string_view k, const std::vector<T> &v) {
+            if (!v.empty()) u.params().append({std::string(k), join_vector(v)});
+        }
+
+        std::string with_query(std::string base, const boost::urls::url &u) {
+            auto q = static_cast<std::string>(u.encoded_query());
+            if (q.empty()) return base;
+            base.push_back('?');
+            base.append(q);
+            return base;
+        }
+    }
+
+    std::string GammaClient::fetch_status() {
+        const auto response = http_.get("/status");
+        if (!response.ok())
+            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        return response.body;
+    }
+
+    std::vector<Team> GammaClient::fetch_teams(const TeamsRequest &req) {
+        boost::urls::url u;
+        append_opt_int(u, "limit",  req.limit);
+        append_opt_int(u, "offset", req.offset);
+        append_str   (u, "league", req.league);
+        append_vec   (u, "name",   req.name);
+        const auto response = http_.get(with_query("/teams", u));
+        if (!response.ok())
+            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        return json::value_to<std::vector<Team>>(json::parse(response.body));
+    }
+
+    std::vector<SportsMetadata> GammaClient::fetch_sports() {
+        const auto response = http_.get("/sports");
+        if (!response.ok())
+            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        return json::value_to<std::vector<SportsMetadata>>(json::parse(response.body));
+    }
+
+    SportsMarketTypesResponse GammaClient::fetch_sports_market_types() {
+        const auto response = http_.get("/sports/market-types");
+        if (!response.ok())
+            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        return json::value_to<SportsMarketTypesResponse>(json::parse(response.body));
+    }
+
+    std::vector<Tag> GammaClient::fetch_tags(const TagsRequest &req) {
+        boost::urls::url u;
+        append_opt_int (u, "limit",            req.limit);
+        append_opt_int (u, "offset",           req.offset);
+        append_str     (u, "order",            req.order);
+        append_opt_bool(u, "ascending",        req.ascending);
+        append_opt_bool(u, "include_template", req.include_template);
+        append_opt_bool(u, "is_carousel",      req.is_carousel);
+        const auto response = http_.get(with_query("/tags", u));
+        if (!response.ok())
+            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        return json::value_to<std::vector<Tag>>(json::parse(response.body));
+    }
+
+    Tag GammaClient::fetch_tag_by_id(const std::string &id) {
+        const auto response = http_.get("/tags/" + id);
+        if (!response.ok())
+            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        return json::value_to<Tag>(json::parse(response.body));
+    }
+
+    Tag GammaClient::fetch_tag_by_slug(const std::string &slug) {
+        const auto response = http_.get("/tags/slug/" + slug);
+        if (!response.ok())
+            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        return json::value_to<Tag>(json::parse(response.body));
+    }
+
+    std::vector<RelatedTag> GammaClient::fetch_related_tags_by_id(const std::string &id,
+                                                                  const RelatedTagsRequest &req) {
+        boost::urls::url u;
+        append_str(u, "status", req.status);
+        const auto response = http_.get(with_query("/tags/" + id + "/related-tags", u));
+        if (!response.ok())
+            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        return json::value_to<std::vector<RelatedTag>>(json::parse(response.body));
+    }
+
+    std::vector<RelatedTag> GammaClient::fetch_related_tags_by_slug(const std::string &slug,
+                                                                    const RelatedTagsRequest &req) {
+        boost::urls::url u;
+        append_str(u, "status", req.status);
+        const auto response = http_.get(with_query("/tags/slug/" + slug + "/related-tags", u));
+        if (!response.ok())
+            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        return json::value_to<std::vector<RelatedTag>>(json::parse(response.body));
+    }
+
+    std::vector<Tag> GammaClient::fetch_tags_related_to_tag_by_id(const std::string &id,
+                                                                  const RelatedTagsRequest &req) {
+        boost::urls::url u;
+        append_str(u, "status", req.status);
+        const auto response = http_.get(with_query("/tags/" + id + "/related-tags/tags", u));
+        if (!response.ok())
+            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        return json::value_to<std::vector<Tag>>(json::parse(response.body));
+    }
+
+    std::vector<Tag> GammaClient::fetch_tags_related_to_tag_by_slug(const std::string &slug,
+                                                                    const RelatedTagsRequest &req) {
+        boost::urls::url u;
+        append_str(u, "status", req.status);
+        const auto response = http_.get(with_query("/tags/slug/" + slug + "/related-tags/tags", u));
+        if (!response.ok())
+            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        return json::value_to<std::vector<Tag>>(json::parse(response.body));
+    }
+
+    std::vector<Series> GammaClient::fetch_series(const SeriesListRequest &req) {
+        boost::urls::url u;
+        append_opt_int (u, "limit",             req.limit);
+        append_opt_int (u, "offset",            req.offset);
+        append_str     (u, "order",             req.order);
+        append_opt_bool(u, "ascending",         req.ascending);
+        append_vec     (u, "slug",              req.slug);
+        append_vec     (u, "categories_ids",    req.categories_ids);
+        append_vec     (u, "categories_labels", req.categories_labels);
+        append_opt_bool(u, "closed",            req.closed);
+        append_opt_bool(u, "include_chat",      req.include_chat);
+        append_str     (u, "recurrence",        req.recurrence);
+        const auto response = http_.get(with_query("/series", u));
+        if (!response.ok())
+            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        return json::value_to<std::vector<Series>>(json::parse(response.body));
+    }
+
+    Series GammaClient::fetch_series_by_id(const std::string &id) {
+        const auto response = http_.get("/series/" + id);
+        if (!response.ok())
+            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        return json::value_to<Series>(json::parse(response.body));
+    }
+
+    std::vector<Comment> GammaClient::fetch_comments(const CommentsRequest &req) {
+        boost::urls::url u;
+        append_str     (u, "parent_entity_type", req.parent_entity_type);
+        append_str     (u, "parent_entity_id",   req.parent_entity_id);
+        append_opt_int (u, "limit",              req.limit);
+        append_opt_int (u, "offset",             req.offset);
+        append_str     (u, "order",              req.order);
+        append_opt_bool(u, "ascending",          req.ascending);
+        append_opt_bool(u, "get_positions",      req.get_positions);
+        append_opt_bool(u, "holders_only",       req.holders_only);
+        const auto response = http_.get(with_query("/comments", u));
+        if (!response.ok())
+            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        return json::value_to<std::vector<Comment>>(json::parse(response.body));
+    }
+
+    std::vector<Comment> GammaClient::fetch_comments_by_id(const std::string &id) {
+        const auto response = http_.get("/comments/" + id);
+        if (!response.ok())
+            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        return json::value_to<std::vector<Comment>>(json::parse(response.body));
+    }
+
+    std::vector<Comment> GammaClient::fetch_comments_by_user_address(const std::string &user_address) {
+        const auto response = http_.get("/comments/user_address/" + user_address);
+        if (!response.ok())
+            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        return json::value_to<std::vector<Comment>>(json::parse(response.body));
+    }
+
+    PublicProfile GammaClient::fetch_public_profile(const std::string &address) {
+        boost::urls::url u;
+        u.params().append({"address", address});
+        const auto response = http_.get(with_query("/public-profile", u));
+        if (!response.ok())
+            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        return json::value_to<PublicProfile>(json::parse(response.body));
+    }
+
+    SearchResults GammaClient::fetch_public_search(const SearchRequest &req) {
+        boost::urls::url u;
+        append_str     (u, "q",                   req.q);
+        append_opt_bool(u, "cache",               req.cache);
+        append_str     (u, "events_status",       req.events_status);
+        append_opt_int (u, "limit_per_type",      req.limit_per_type);
+        append_opt_int (u, "page",                req.page);
+        append_vec     (u, "events_tag",          req.events_tag);
+        append_opt_int (u, "keep_closed_markets", req.keep_closed_markets);
+        append_str     (u, "sort",                req.sort);
+        append_opt_bool(u, "ascending",           req.ascending);
+        append_opt_bool(u, "search_tags",         req.search_tags);
+        append_opt_bool(u, "search_profiles",     req.search_profiles);
+        append_str     (u, "recurrence",          req.recurrence);
+        append_vec     (u, "exclude_tag_id",      req.exclude_tag_id);
+        append_opt_bool(u, "optimized",           req.optimized);
+        const auto response = http_.get(with_query("/public-search", u));
+        if (!response.ok())
+            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        return json::value_to<SearchResults>(json::parse(response.body));
     }
 }

@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 #include <boost/describe.hpp>
@@ -68,11 +69,12 @@ namespace polymarket::gamma {
         std::string  updatedAt;
         bool         forceHide  = false;
         bool         isCarousel = false;
+        bool         requiresTranslation = false;
     };
     BOOST_DESCRIBE_STRUCT(Tag, (),
         (id, label, slug, forceShow, publishedAt,
          createdBy, updatedBy, createdAt, updatedAt,
-         forceHide, isCarousel))
+         forceHide, isCarousel, requiresTranslation))
 
     struct Chat {
         std::string id;
@@ -206,6 +208,7 @@ namespace polymarket::gamma {
 
         std::int64_t      commentCount = 0;
         std::vector<Chat> chats;
+        bool              requiresTranslation = false;
     };
     BOOST_DESCRIBE_STRUCT(Series, (),
         (id, ticker, slug, title, subtitle, seriesType, recurrence, description,
@@ -216,7 +219,7 @@ namespace polymarket::gamma {
          commentsEnabled, competitive, volume24hr, volume, liquidity,
          startDate, pythTokenID, cgAssetName, score,
          events, collections, categories, tags,
-         commentCount, chats))
+         commentCount, chats, requiresTranslation))
 
     struct EventBase {
         std::string  id;
@@ -332,6 +335,18 @@ namespace polymarket::gamma {
         std::string  deployingTimestamp;
         std::string  scheduledDeploymentTimestamp;
         std::string  gameStatus;
+        std::string  parentEventId;
+        std::string  sportsradarMatchId;
+        std::string  turnProviderId;
+        bool         requiresTranslation = false;
+        bool         negRiskAugmented = false;
+        std::int64_t gameId = 0;
+        std::string  electionType;
+        std::string  countryName;
+        std::string  color;
+        bool         cumulativeMarkets = false;
+        std::string  awayTeamName;
+        std::string  homeTeamName;
     };
     BOOST_DESCRIBE_STRUCT(Event, (EventBase),
         (automaticallyResolved, enableNegRisk, automaticallyActive,
@@ -342,11 +357,28 @@ namespace polymarket::gamma {
          estimateValue, cantEstimate, estimatedValue, templates,
          spreadsMainLine, totalsMainLine, carouselMap,
          pendingDeployment, deploying, deployingTimestamp,
-         scheduledDeploymentTimestamp, gameStatus))
+         scheduledDeploymentTimestamp, gameStatus,
+         parentEventId, sportsradarMatchId, turnProviderId,
+         requiresTranslation, negRiskAugmented, gameId,
+         electionType, countryName, color, cumulativeMarkets,
+         awayTeamName, homeTeamName))
 
     // ---------------------------------------------------------------------------
     // Market (top-level element of the markets[] array)
     // ---------------------------------------------------------------------------
+
+    struct ClobReward {
+        std::string id;
+        std::string assetAddress;
+        std::string conditionId;
+        std::string startDate;
+        std::string endDate;
+        double      rewardsAmount    = 0.0;
+        double      rewardsDailyRate = 0.0;
+    };
+    BOOST_DESCRIBE_STRUCT(ClobReward, (),
+        (id, assetAddress, conditionId, startDate, endDate,
+         rewardsAmount, rewardsDailyRate))
 
     struct MarketBase {
         std::string  id;
@@ -523,6 +555,23 @@ namespace polymarket::gamma {
         std::string  eventStartTime;
         bool         feesEnabled = false;
         FeeSchedule  feeSchedule;
+        std::int64_t makerRebatesFeeShareBps = 0;
+        bool         requiresTranslation = false;
+        bool         pagerDutyNotificationEnabled = false;
+        bool         approved = false;
+        bool         cyom = false;
+        bool         holdingRewardsEnabled = false;
+        bool         negRisk = false;
+        std::string  negRiskRequestID;
+        std::string  negRiskMarketID;
+        bool         sentDiscord = false;
+        std::int64_t twitterCardLastRefreshed = 0;
+        std::string  twitterCardLocation;
+        std::string  twitterCardLastValidated;
+        std::string  categoryMailchimpTag;
+        std::string  submittedBy;
+        std::string  subcategory;
+        std::vector<ClobReward> clobRewards;
     };
     BOOST_DESCRIBE_STRUCT(Market, (MarketExt),
         (readyTimestamp, fundedTimestamp, acceptingOrdersTimestamp,
@@ -536,7 +585,13 @@ namespace polymarket::gamma {
          gameId, groupItemRange, sportsMarketType, line,
          umaResolutionStatuses, pendingDeployment, deploying,
          deployingTimestamp, scheduledDeploymentTimestamp,
-         rfqEnabled, eventStartTime, feesEnabled, feeSchedule))
+         rfqEnabled, eventStartTime, feesEnabled, feeSchedule,
+         makerRebatesFeeShareBps, requiresTranslation,
+         pagerDutyNotificationEnabled, approved, cyom,
+         holdingRewardsEnabled, negRisk, negRiskRequestID, negRiskMarketID,
+         sentDiscord, twitterCardLastRefreshed, twitterCardLocation,
+         twitterCardLastValidated, categoryMailchimpTag, submittedBy,
+         subcategory, clobRewards))
 
     // ---------------------------------------------------------------------------
     // Response envelope
@@ -567,7 +622,7 @@ namespace polymarket::gamma {
         std::string profileImageOptimized;
         bool verified;
     };
-    BOOST_DESCRIBE_STRUCT(Holder, (), (proxyWallet, bio, asset, pseudonym, amount, displayUsernamePublic, outcomeIndex, name, profileImage, profileImageOptimized))
+    BOOST_DESCRIBE_STRUCT(Holder, (), (proxyWallet, bio, asset, pseudonym, amount, displayUsernamePublic, outcomeIndex, name, profileImage, profileImageOptimized, verified))
 
     struct MarketHolders {
         std::string token;
@@ -669,6 +724,259 @@ namespace polymarket::gamma {
         std::string locale;
     };
 
+    // ---------------------------------------------------------------------------
+    // Teams / Sports
+    // ---------------------------------------------------------------------------
+    struct Team {
+        std::int32_t id = 0;
+        std::string  name;
+        std::string  league;
+        std::string  record;
+        std::string  logo;
+        std::string  abbreviation;
+        std::string  alias;
+        std::string  createdAt;
+        std::string  updatedAt;
+        std::string  color;
+        std::int32_t providerId = 0;
+    };
+    BOOST_DESCRIBE_STRUCT(Team, (),
+        (id, name, league, record, logo, abbreviation, alias,
+         createdAt, updatedAt, color, providerId))
+
+    struct SportsMetadata {
+        std::int32_t             id = 0;
+        std::string              sport;
+        std::string              image;
+        std::string              resolution;
+        std::string              ordering;
+        std::vector<std::string> tags;          // server returns CSV string; parsed by glue
+        std::string              series;
+        std::string              createdAt;
+    };
+    BOOST_DESCRIBE_STRUCT(SportsMetadata, (),
+        (id, sport, image, resolution, ordering, tags, series, createdAt))
+
+    struct SportsMarketTypesResponse {
+        std::vector<std::string> marketTypes;
+    };
+    BOOST_DESCRIBE_STRUCT(SportsMarketTypesResponse, (), (marketTypes))
+
+    // ---------------------------------------------------------------------------
+    // Related tags
+    // ---------------------------------------------------------------------------
+    struct RelatedTag {
+        std::string  id;
+        std::string  tagID;          // wire: "tagID"
+        std::string  relatedTagID;   // wire: "relatedTagID"
+        std::int32_t rank = 0;
+    };
+    BOOST_DESCRIBE_STRUCT(RelatedTag, (), (id, tagID, relatedTagID, rank))
+
+    // ---------------------------------------------------------------------------
+    // Comments
+    // ---------------------------------------------------------------------------
+    struct CommentPosition {
+        std::string tokenId;
+        double      positionSize = 0.0;
+    };
+    BOOST_DESCRIBE_STRUCT(CommentPosition, (), (tokenId, positionSize))
+
+    struct CommentProfile {
+        std::string                  name;
+        std::string                  pseudonym;
+        bool                         displayUsernamePublic = false;
+        std::string                  bio;
+        bool                         isMod = false;
+        bool                         isCreator = false;
+        std::string                  proxyWallet;
+        std::string                  baseAddress;
+        std::string                  profileImage;
+        ImageOptimized               profileImageOptimized;
+        std::vector<CommentPosition> positions;
+    };
+    BOOST_DESCRIBE_STRUCT(CommentProfile, (),
+        (name, pseudonym, displayUsernamePublic, bio, isMod, isCreator,
+         proxyWallet, baseAddress, profileImage, profileImageOptimized, positions))
+
+    struct Reaction {
+        std::string    id;
+        std::int32_t   commentID = 0;
+        std::string    reactionType;
+        std::string    icon;
+        std::string    userAddress;
+        std::string    createdAt;
+        CommentProfile profile;
+    };
+    BOOST_DESCRIBE_STRUCT(Reaction, (),
+        (id, commentID, reactionType, icon, userAddress, createdAt, profile))
+
+    struct Comment {
+        std::string           id;
+        std::string           body;
+        std::string           parentEntityType;
+        std::int32_t          parentEntityID = 0;
+        std::string           parentCommentID;
+        std::string           userAddress;
+        std::string           replyAddress;
+        std::string           createdAt;
+        std::string           updatedAt;
+        CommentProfile        profile;
+        std::vector<Reaction> reactions;
+        std::int32_t          reportCount = 0;
+        std::int32_t          reactionCount = 0;
+    };
+    BOOST_DESCRIBE_STRUCT(Comment, (),
+        (id, body, parentEntityType, parentEntityID, parentCommentID,
+         userAddress, replyAddress, createdAt, updatedAt, profile,
+         reactions, reportCount, reactionCount))
+
+    // ---------------------------------------------------------------------------
+    // Public profile
+    // ---------------------------------------------------------------------------
+    struct PublicProfileUser {
+        std::string id;
+        bool        creator = false;
+        bool        isMod = false;       // wire: "mod"
+    };
+    BOOST_DESCRIBE_STRUCT(PublicProfileUser, (), (id, creator, isMod))
+
+    struct PublicProfile {
+        std::string                    createdAt;
+        std::string                    proxyWallet;
+        std::string                    profileImage;
+        bool                           displayUsernamePublic = false;
+        std::string                    bio;
+        std::string                    pseudonym;
+        std::string                    name;
+        std::vector<PublicProfileUser> users;
+        std::string                    xUsername;
+        bool                           verifiedBadge = false;
+    };
+    BOOST_DESCRIBE_STRUCT(PublicProfile, (),
+        (createdAt, proxyWallet, profileImage, displayUsernamePublic,
+         bio, pseudonym, name, users, xUsername, verifiedBadge))
+
+    // ---------------------------------------------------------------------------
+    // Public search
+    // ---------------------------------------------------------------------------
+    struct SearchTag {
+        std::string  id;
+        std::string  label;
+        std::string  slug;
+        std::int32_t eventCount = 0;
+    };
+    BOOST_DESCRIBE_STRUCT(SearchTag, (), (id, label, slug, eventCount))
+
+    struct Profile {
+        std::string  id;
+        std::string  name;
+        std::int32_t user = 0;
+        std::string  referral;
+        std::int32_t createdBy = 0;
+        std::int32_t updatedBy = 0;
+        std::string  createdAt;
+        std::string  updatedAt;
+        std::string  utmSource;
+        std::string  utmMedium;
+        std::string  utmCampaign;
+        std::string  utmContent;
+        std::string  utmTerm;
+        bool         walletActivated = false;
+        std::string  pseudonym;
+        bool         displayUsernamePublic = false;
+        std::string  profileImage;
+        std::string  bio;
+        std::string  proxyWallet;
+        ImageOptimized profileImageOptimized;
+        bool         isCloseOnly = false;
+        bool         isCertReq = false;
+        std::string  certReqDate;
+    };
+    BOOST_DESCRIBE_STRUCT(Profile, (),
+        (id, name, user, referral, createdBy, updatedBy, createdAt, updatedAt,
+         utmSource, utmMedium, utmCampaign, utmContent, utmTerm,
+         walletActivated, pseudonym, displayUsernamePublic, profileImage, bio,
+         proxyWallet, profileImageOptimized, isCloseOnly, isCertReq, certReqDate))
+
+    struct Pagination {
+        std::int32_t hasMorePages = 0;     // shape varies; conservative default
+        std::int32_t totalResults = 0;
+    };
+    BOOST_DESCRIBE_STRUCT(Pagination, (), (hasMorePages, totalResults))
+
+    struct SearchResults {
+        std::vector<Event>     events;
+        std::vector<SearchTag> tags;
+        std::vector<Profile>   profiles;
+        Pagination             pagination;
+    };
+    BOOST_DESCRIBE_STRUCT(SearchResults, (), (events, tags, profiles, pagination))
+
+    // ---------------------------------------------------------------------------
+    // Request structs for the new endpoints
+    // ---------------------------------------------------------------------------
+    struct TagsRequest {
+        std::optional<int>  limit;
+        std::optional<int>  offset;
+        std::string         order;
+        std::optional<bool> ascending;
+        std::optional<bool> include_template;
+        std::optional<bool> is_carousel;
+    };
+
+    struct SeriesListRequest {
+        std::optional<int>       limit;
+        std::optional<int>       offset;
+        std::string              order;
+        std::optional<bool>      ascending;
+        std::vector<std::string> slug;
+        std::vector<std::string> categories_ids;
+        std::vector<std::string> categories_labels;
+        std::optional<bool>      closed;
+        std::optional<bool>      include_chat;
+        std::string              recurrence;
+    };
+
+    struct CommentsRequest {
+        std::string         parent_entity_type;     // "Event" | "Series" | "market"
+        std::string         parent_entity_id;
+        std::optional<int>  limit;
+        std::optional<int>  offset;
+        std::string         order;
+        std::optional<bool> ascending;
+        std::optional<bool> get_positions;
+        std::optional<bool> holders_only;
+    };
+
+    struct SearchRequest {
+        std::string              q;                    // required
+        std::optional<bool>      cache;
+        std::string              events_status;
+        std::optional<int>       limit_per_type;
+        std::optional<int>       page;
+        std::vector<std::string> events_tag;
+        std::optional<int>       keep_closed_markets;
+        std::string              sort;
+        std::optional<bool>      ascending;
+        std::optional<bool>      search_tags;
+        std::optional<bool>      search_profiles;
+        std::string              recurrence;
+        std::vector<std::string> exclude_tag_id;
+        std::optional<bool>      optimized;
+    };
+
+    struct TeamsRequest {
+        std::optional<int>       limit;
+        std::optional<int>       offset;
+        std::string              league;
+        std::vector<std::string> name;
+    };
+
+    // Used by GET /tags/{id}/related-tags?status=...
+    struct RelatedTagsRequest {
+        std::string status;        // "active" | "closed" | "all"
+    };
 
 }
 

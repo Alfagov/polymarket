@@ -2,16 +2,77 @@
 // Created by Lorenzo P on 4/21/26.
 //
 
-#include <format>
-#include <stdexcept>
-
 #include "clob_client.h"
 
+#include <format>
 #include <iostream>
+#include <stdexcept>
+#include <utility>
 
-namespace json  = boost::json;
+namespace json = boost::json;
+namespace urls = boost::urls;
 
 namespace polymarket::clob {
+
+    namespace {
+        // Centralized error throw to keep call sites compact.
+        [[noreturn]] void throw_http(const HttpResponse &r) {
+            throw std::runtime_error(
+                "HTTP request failed: " + std::to_string(r.status) + " - " + r.error);
+        }
+
+        // POST a JSON array of objects keyed by "token_id" (and optionally "side").
+        std::string make_token_array(const std::vector<std::string> &token_ids) {
+            json::array arr;
+            for (const auto &id : token_ids) {
+                arr.push_back(json::object{{"token_id", id}});
+            }
+            return json::serialize(arr);
+        }
+
+        std::string make_token_side_array(const std::vector<std::string> &token_ids,
+                                          const std::vector<TradeSide> &sides) {
+            json::array arr;
+            for (size_t i = 0; i < token_ids.size(); ++i) {
+                arr.push_back(json::object{
+                    {"token_id", token_ids[i]},
+                    {"side",     to_string(sides[i])},
+                });
+            }
+            return json::serialize(arr);
+        }
+
+        // Drain cursor-paginated endpoints. Stops when next_cursor is empty or "LTE=".
+        template <class T>
+        std::vector<T> drain_pages(HttpClient &http, const std::string &base_path) {
+            std::vector<T> out;
+            std::string cursor;
+            while (true) {
+                std::string path = base_path;
+                if (!cursor.empty()) {
+                    path += (path.find('?') == std::string::npos ? "?" : "&");
+                    path += "next_cursor=" + cursor;
+                }
+
+                const auto response = http.get(path);
+                if (!response.ok()) throw_http(response);
+
+                auto page = json::value_to<Page<T>>(json::parse(response.body));
+                cursor = page.next_cursor;
+
+                std::cout << "Downloaded: " << page.count
+                          << " Total: " << out.size()
+                          << " Cursor: " << cursor << std::endl;
+
+                if (page.data.empty()) break;
+                for (auto &row : page.data) out.push_back(std::move(row));
+                if (cursor.empty() || cursor == "LTE=") break;
+            }
+            return out;
+        }
+
+    } // namespace
+
     ClobClient::ClobClient(const APIConfig &config)
         : config_(config)
     {
@@ -19,295 +80,257 @@ namespace polymarket::clob {
         http_.set_timeout(config_.http_timeout_ms);
     }
 
-    OrderBook ClobClient::fetch_order_book(std::string token_id) {
+    // ============================================================
+    // Health / metadata
+    // ============================================================
+    std::string ClobClient::fetch_ok() {
+        const auto response = http_.get("/");
+        if (!response.ok()) throw_http(response);
+        return response.body;
+    }
+
+    std::int64_t ClobClient::fetch_server_time() {
+        const auto response = http_.get("/time");
+        if (!response.ok()) throw_http(response);
+        // Server returns a JSON number (i64 milliseconds). Body is "<digits>".
+        // Strip trailing whitespace/newlines defensively.
+        return std::stoll(response.body);
+    }
+
+    std::uint32_t ClobClient::fetch_version() {
+        const auto response = http_.get("/version");
+        if (!response.ok()) throw_http(response);
+        auto jv = json::parse(response.body);
+        if (auto const* obj = jv.if_object()) {
+            if (auto const* v = obj->if_contains("version"))
+                return static_cast<std::uint32_t>(v->to_number<std::uint64_t>());
+        }
+        return 0;
+    }
+
+    // ============================================================
+    // Order book
+    // ============================================================
+    OrderBook ClobClient::fetch_order_book(const std::string &token_id) {
         const std::string path = std::format("/book?token_id={}", token_id);
-
         const auto response = http_.get(path);
-        if (!response.ok())
-            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
+        if (!response.ok()) throw_http(response);
         return json::value_to<OrderBook>(json::parse(response.body));
     }
 
     std::vector<OrderBook> ClobClient::fetch_order_books(const std::vector<std::string> &token_ids) {
-        constexpr std::string path = "/books";
-
-        json::array json_array;
-        for (const auto& id : token_ids) {
-            json::object obj;
-            obj["token_id"] = id;
-            json_array.push_back(obj);
-        }
-
-        std::string json_string = json::serialize(json_array);
-
-        const auto response = http_.post(path, json_string);
-        if (!response.ok())
-            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
+        const auto response = http_.post("/books", make_token_array(token_ids));
+        if (!response.ok()) throw_http(response);
         return json::value_to<std::vector<OrderBook>>(json::parse(response.body));
     }
 
-    double ClobClient::fetch_market_price(std::string token_id, const TradeSide side) {
-        const std::string path = std::format("/price?token_id={}&side={}", token_id, to_string(side));
-
+    // ============================================================
+    // Prices
+    // ============================================================
+    double ClobClient::fetch_market_price(const std::string &token_id, const TradeSide side) {
+        const std::string path = std::format("/price?token_id={}&side={}",
+                                             token_id, to_string(side));
         const auto response = http_.get(path);
-        if (!response.ok())
-            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
-        return json::parse(response.body).as_object().at("price").as_double();
+        if (!response.ok()) throw_http(response);
+        return json::value_to<PriceResponse>(json::parse(response.body)).price;
     }
 
-    TokenSidePrices ClobClient::fetch_market_prices(const std::vector<std::string> &token_ids, const std::vector<TradeSide> &sides) {
-        constexpr std::string path = "/prices";
-
+    TokenSidePrices ClobClient::fetch_market_prices(
+        const std::vector<std::string> &token_ids,
+        const std::vector<TradeSide> &sides)
+    {
         if (token_ids.size() != sides.size())
-            throw std::runtime_error("Invalid number of token ids provided");
+            throw std::runtime_error("token_ids and sides size mismatch");
 
-        json::array json_array;
-        for (size_t i = 0; i < token_ids.size(); ++i) {
-            json::object obj;
-            obj["token_id"] = token_ids[i];
-            obj["side"] = to_string(sides[i]);
-            json_array.push_back(obj);
-        }
-
-        std::string json_string = json::serialize(json_array);
-
-        const auto response = http_.post(path, json_string);
-        if (!response.ok())
-            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
+        const auto response = http_.post("/prices", make_token_side_array(token_ids, sides));
+        if (!response.ok()) throw_http(response);
         return json::value_to<TokenSidePrices>(json::parse(response.body));
     }
 
-    double ClobClient::fetch_midpoint_price(std::string token_id) {
+    double ClobClient::fetch_midpoint_price(const std::string &token_id) {
         const std::string path = std::format("/midpoint?token_id={}", token_id);
-
         const auto response = http_.get(path);
-        if (!response.ok())
-            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
-        return json::parse(response.body).as_object().at("mid_price").as_double();
+        if (!response.ok()) throw_http(response);
+        return json::value_to<MidpointResponse>(json::parse(response.body)).mid;
     }
 
-    TokenPrices ClobClient::fetch_midpoint_prices(std::vector<std::string> token_ids) {
-        constexpr std::string path = "/midpoints";
-
-        json::array json_array;
-        for (size_t i = 0; i < token_ids.size(); ++i) {
-            json::object obj;
-            obj["token_id"] = token_ids[i];
-            json_array.push_back(obj);
-        }
-
-        std::string json_string = json::serialize(json_array);
-
-        const auto response = http_.post(path, json_string);
-        if (!response.ok())
-            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
+    TokenPrices ClobClient::fetch_midpoint_prices(const std::vector<std::string> &token_ids) {
+        const auto response = http_.post("/midpoints", make_token_array(token_ids));
+        if (!response.ok()) throw_http(response);
         return json::value_to<TokenPrices>(json::parse(response.body));
     }
 
-    double ClobClient::fetch_spread(std::string token_id) {
+    double ClobClient::fetch_spread(const std::string &token_id) {
         const std::string path = std::format("/spread?token_id={}", token_id);
-
         const auto response = http_.get(path);
-        if (!response.ok())
-            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
-        std::string spread_string = json::parse(response.body).as_object().at("spread").get_string().c_str();
-
-        return std::stod(spread_string);
+        if (!response.ok()) throw_http(response);
+        return json::value_to<SpreadResponse>(json::parse(response.body)).spread;
     }
 
-    TokenPrices ClobClient::fetch_spreads(std::vector<std::string> token_ids) {
-        const std::string path = "/spreads";
-
-        json::array json_array;
-        for (size_t i = 0; i < token_ids.size(); ++i) {
-            json::object obj;
-            obj["token_id"] = token_ids[i];
-            json_array.push_back(obj);
-        }
-
-        std::string json_string = json::serialize(json_array);
-
-        const auto response = http_.post(path, json_string);
-        if (!response.ok())
-            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
+    TokenPrices ClobClient::fetch_spreads(const std::vector<std::string> &token_ids) {
+        const auto response = http_.post("/spreads", make_token_array(token_ids));
+        if (!response.ok()) throw_http(response);
         return json::value_to<TokenPrices>(json::parse(response.body));
     }
 
-    SidePriceQuote ClobClient::fetch_last_traded_price(std::string token_id) {
+    LastTradePriceResponse ClobClient::fetch_last_traded_price(const std::string &token_id) {
         const std::string path = std::format("/last-trade-price?token_id={}", token_id);
-
         const auto response = http_.get(path);
-        if (!response.ok())
-            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
-        return json::value_to<SidePriceQuote>(json::parse(response.body));
+        if (!response.ok()) throw_http(response);
+        return json::value_to<LastTradePriceResponse>(json::parse(response.body));
     }
 
+    std::vector<LastTradesPriceItem>
+    ClobClient::fetch_last_traded_prices(const std::vector<std::string> &token_ids) {
+        // Rust client uses GET with a JSON body — preserve that contract.
+        const auto response = http_.post("/last-trades-prices", make_token_array(token_ids));
+        if (!response.ok()) throw_http(response);
+        return json::value_to<std::vector<LastTradesPriceItem>>(json::parse(response.body));
+    }
 
-    std::vector<TokenSidePriceQuote> ClobClient::fetch_last_traded_prices(std::vector<std::string> token_ids) {
-        const std::string path = "/last-trade-prices";
+    PriceHistoryResponse ClobClient::fetch_prices_history(const PriceHistoryRequest &req) {
+        urls::url u;
+        u.params().append({"market", req.market});
 
-        json::array json_array;
-        for (const auto& id : token_ids) {
-            json::object obj;
-            obj["token_id"] = id;
-            json_array.push_back(obj);
+        // interval and (start_ts/end_ts) are mutually exclusive on the server.
+        if (req.interval && *req.interval != PriceHistoryInterval::None) {
+            u.params().append({"interval", to_string(*req.interval)});
+        } else {
+            if (req.start_ts) u.params().append({"startTs", std::to_string(*req.start_ts)});
+            if (req.end_ts)   u.params().append({"endTs",   std::to_string(*req.end_ts)});
         }
+        if (req.fidelity) u.params().append({"fidelity", std::to_string(*req.fidelity)});
 
-        std::string json_string = json::serialize(json_array);
-
-        const auto response = http_.post(path, json_string);
-        if (!response.ok())
-            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
-        return json::value_to<std::vector<TokenSidePriceQuote>>(json::parse(response.body));
-    }
-
-    PriceHistory ClobClient::fetch_prices_history(std::string market, double start_ts, double end_ts, std::string interval, int fidelity) {
-        std::string path = std::format("/history?market={}", market);
-
+        const std::string path = "/prices-history?" + std::string(u.encoded_query());
         const auto response = http_.get(path);
-        if (!response.ok())
-            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
-        return json::value_to<PriceHistory>(json::parse(response.body));
+        if (!response.ok()) throw_http(response);
+        return json::value_to<PriceHistoryResponse>(json::parse(response.body));
     }
 
-    int ClobClient::fetch_fee_rate(std::string token_id) {
+    // ============================================================
+    // Market info
+    // ============================================================
+    std::uint32_t ClobClient::fetch_fee_rate(const std::string &token_id) {
         const std::string path = std::format("/fee-rate?token_id={}", token_id);
-
         const auto response = http_.get(path);
-        if (!response.ok())
-            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
-        return json::parse(response.body).as_object().at("base_fee").as_int64();
+        if (!response.ok()) throw_http(response);
+        return json::value_to<FeeRateResponse>(json::parse(response.body)).base_fee;
     }
 
-    double ClobClient::fetch_tick_size(std::string token_id) {
+    double ClobClient::fetch_tick_size(const std::string &token_id) {
         const std::string path = std::format("/tick-size?token_id={}", token_id);
-
         const auto response = http_.get(path);
-        if (!response.ok())
-            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
-        return json::parse(response.body).as_object().at("minimum_tick_size").as_double();
+        if (!response.ok()) throw_http(response);
+        return json::value_to<TickSizeResponse>(json::parse(response.body)).minimum_tick_size;
     }
 
-    ClobMarketInfo ClobClient::fetch_clob_market_info(std::string condition_id) {
-        const std::string path = std::format("/clob-markets/{}", condition_id);
-
+    bool ClobClient::fetch_neg_risk(const std::string &token_id) {
+        const std::string path = std::format("/neg-risk?token_id={}", token_id);
         const auto response = http_.get(path);
-        if (!response.ok())
-            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
+        if (!response.ok()) throw_http(response);
+        return json::value_to<NegRiskResponse>(json::parse(response.body)).neg_risk;
+    }
 
+    ClobMarketInfo ClobClient::fetch_clob_market_info(const std::string &condition_id) {
+        const std::string path = std::format("/clob-markets/{}", condition_id);
+        const auto response = http_.get(path);
+        if (!response.ok()) throw_http(response);
         return json::value_to<ClobMarketInfo>(json::parse(response.body));
     }
 
-    int ClobClient::fetch_server_time() {
-        constexpr std::string path = "/time";
-
+    MarketResponse ClobClient::fetch_market(const std::string &condition_id) {
+        const std::string path = std::format("/markets/{}", condition_id);
         const auto response = http_.get(path);
-        if (!response.ok())
-            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
-        return std::stoi(response.body);
+        if (!response.ok()) throw_http(response);
+        return json::value_to<MarketResponse>(json::parse(response.body));
     }
 
-    std::vector<ClobMarket> ClobClient::fetch_simplified_markets() {
-        const std::string path = "/simplified-markets";
-
+    MarketByTokenResponse ClobClient::fetch_market_by_token(const std::string &token_id) {
+        const std::string path = std::format("/markets-by-token/{}", token_id);
         const auto response = http_.get(path);
-        if (!response.ok())
-            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
-        return json::value_to<ClobMarketsResponse>(json::parse(response.body)).data;
+        if (!response.ok()) throw_http(response);
+        return json::value_to<MarketByTokenResponse>(json::parse(response.body));
     }
 
-    std::vector<ClobMarket> ClobClient::fetch_markets() {
-        const std::string path = "/sampling-markets";
-
+    json::value ClobClient::fetch_market_trades_events(const std::string &condition_id) {
+        const std::string path = std::format("/markets/live-activity/{}", condition_id);
         const auto response = http_.get(path);
-        if (!response.ok())
-            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
-        return json::value_to<ClobMarketsResponse>(json::parse(response.body)).data;
+        if (!response.ok()) throw_http(response);
+        return json::parse(response.body);
     }
 
-    std::vector<ClobMarket> ClobClient::fetch_all_markets() {
-        std::vector<ClobMarket> all_markets;
-        std::string cursor = "";
-
-        while (true) {
-            std::string path = "/sampling-markets";
-
-            if (!cursor.empty()) {
-                path += "?next_cursor=" + cursor;
-            }
-
-            const auto response = http_.get(path);
-            if (!response.ok())
-                throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
-            auto parsed = json::value_to<ClobMarketsResponse>(json::parse(response.body));
-            cursor = parsed.next_cursor;
-
-            std::cout << "Downloaded: " << parsed.count << " Total: " << all_markets.size() << " Cursor: " << cursor << std::endl;
-            if (cursor.empty() || parsed.data.empty() || cursor == "LTE=")
-                break;
-
-            for (auto mkt : parsed.data) {
-                all_markets.push_back(std::move(mkt));
-            }
-        }
-
-        return all_markets;
+    // ============================================================
+    // Markets pagination (single page)
+    // ============================================================
+    static std::string with_cursor(const std::string &base, const std::string &cursor) {
+        if (cursor.empty()) return base;
+        return base + "?next_cursor=" + cursor;
     }
 
-    std::vector<ClobMarket> ClobClient::fetch_all_simplified_markets() {
-        std::vector<ClobMarket> all_markets;
-        std::string cursor = "";
-
-        while (true) {
-            std::string path = "/sampling-simplified-markets";
-
-            if (!cursor.empty()) {
-                path += "?next_cursor=" + cursor;
-            }
-
-            const auto response = http_.get(path);
-            if (!response.ok())
-                throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
-            auto parsed = json::value_to<ClobMarketsResponse>(json::parse(response.body));
-            cursor = parsed.next_cursor;
-
-            std::cout << "Downloaded: " << parsed.count << " Total: " << all_markets.size() << " Cursor: " << cursor << std::endl;
-            if (cursor.empty() || parsed.data.empty() || cursor == "LTE=")
-                break;
-
-            for (auto mkt : parsed.data) {
-                all_markets.push_back(std::move(mkt));
-            }
-        }
-
-        return all_markets;
+    Page<MarketResponse> ClobClient::fetch_markets(const std::string &cursor) {
+        const auto response = http_.get(with_cursor("/markets", cursor));
+        if (!response.ok()) throw_http(response);
+        return json::value_to<Page<MarketResponse>>(json::parse(response.body));
     }
 
-    std::vector<MakerRebates> ClobClient::fetch_current_maker_rebates(std::string date, std::string maker_address) {
-        const std::string path = std::format("/rebates/current?date={}&maker_address={}", date, maker_address);
+    Page<MarketResponse> ClobClient::fetch_sampling_markets(const std::string &cursor) {
+        const auto response = http_.get(with_cursor("/sampling-markets", cursor));
+        if (!response.ok()) throw_http(response);
+        return json::value_to<Page<MarketResponse>>(json::parse(response.body));
+    }
 
+    Page<SimplifiedMarket> ClobClient::fetch_simplified_markets(const std::string &cursor) {
+        const auto response = http_.get(with_cursor("/simplified-markets", cursor));
+        if (!response.ok()) throw_http(response);
+        return json::value_to<Page<SimplifiedMarket>>(json::parse(response.body));
+    }
+
+    Page<SimplifiedMarket> ClobClient::fetch_sampling_simplified_markets(const std::string &cursor) {
+        const auto response = http_.get(with_cursor("/sampling-simplified-markets", cursor));
+        if (!response.ok()) throw_http(response);
+        return json::value_to<Page<SimplifiedMarket>>(json::parse(response.body));
+    }
+
+    // ============================================================
+    // Markets pagination (drain all pages)
+    // ============================================================
+    std::vector<MarketResponse> ClobClient::fetch_all_markets() {
+        return drain_pages<MarketResponse>(http_, "/markets");
+    }
+
+    std::vector<MarketResponse> ClobClient::fetch_all_sampling_markets() {
+        return drain_pages<MarketResponse>(http_, "/sampling-markets");
+    }
+
+    std::vector<SimplifiedMarket> ClobClient::fetch_all_simplified_markets() {
+        return drain_pages<SimplifiedMarket>(http_, "/simplified-markets");
+    }
+
+    std::vector<SimplifiedMarket> ClobClient::fetch_all_sampling_simplified_markets() {
+        return drain_pages<SimplifiedMarket>(http_, "/sampling-simplified-markets");
+    }
+
+    // ============================================================
+    // Geoblock (different host)
+    // ============================================================
+    GeoblockResponse ClobClient::check_geoblock() {
+        http_.set_base_url("https://polymarket.com");
+        const auto response = http_.get("/api/geoblock");
+        http_.set_base_url(config_.clob_rest_url);
+        if (!response.ok()) throw_http(response);
+        return json::value_to<GeoblockResponse>(json::parse(response.body));
+    }
+
+    // ============================================================
+    // Maker rebates (preserved as-is — live Polymarket endpoint not in Rust client)
+    // ============================================================
+    std::vector<MakerRebates>
+    ClobClient::fetch_current_maker_rebates(const std::string &date,
+                                            const std::string &maker_address) {
+        const std::string path = std::format("/rebates/current?date={}&maker_address={}",
+                                             date, maker_address);
         const auto response = http_.get(path);
-        if (!response.ok())
-            throw std::runtime_error("HTTP request failed: " + std::to_string(response.status) + " - " + response.error);
-
+        if (!response.ok()) throw_http(response);
         return json::value_to<std::vector<MakerRebates>>(json::parse(response.body));
     }
 }
