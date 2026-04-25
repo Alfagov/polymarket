@@ -19,7 +19,7 @@ namespace polymarket::clob {
         std::vector<OrderBook> fetch_order_books(const std::vector<std::string> &token_ids);
 
         double fetch_market_price(std::string token_id, TradeSide side);
-        //TokenSidePrices fetch_market_prices(const std::vector<std::string> &token_ids, const std::vector<TradeSide> &sides);
+        TokenSidePrices fetch_market_prices(const std::vector<std::string> &token_ids, const std::vector<TradeSide> &sides);
 
         double fetch_midpoint_price(std::string token_id);
         TokenPrices fetch_midpoint_prices(std::vector<std::string> token_ids);
@@ -42,6 +42,14 @@ namespace polymarket::clob {
 
         ClobMarketInfo fetch_clob_market_info(std::string condition_id);
         int fetch_server_time();
+
+        std::vector<ClobMarket> fetch_simplified_markets();
+        std::vector<ClobMarket> fetch_markets();
+        std::vector<ClobMarket> fetch_all_simplified_markets();
+        std::vector<ClobMarket> fetch_all_markets();
+
+        std::vector<MakerRebates> fetch_current_maker_rebates(std::string date, std::string maker_address);
+
 
     private:
         APIConfig config_;
