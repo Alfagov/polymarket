@@ -12,6 +12,7 @@ namespace polymarket {
     struct APIConfig {
         std::string clob_rest_url = "https://clob.polymarket.com";
         std::string clob_ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market";
+        std::string polymarket_url = "https://polymarket.com";
         std::string gamma_api_url = "https://gamma-api.polymarket.com";
         std::string data_api_url = "https://data-api.polymarket.com";
         std::string rtds_ws_url = "wss://ws-live-data.polymarket.com";

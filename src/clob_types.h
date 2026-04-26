@@ -350,6 +350,36 @@ namespace polymarket::clob {
     // JSON glue
     // ---------------------------------------------------------------------------
     namespace detail {
+        // Read a field that may arrive as either a JSON number or a quoted string.
+        inline double as_number_or_string(boost::json::value const& jv) {
+            if (jv.is_double())  return jv.as_double();
+            if (jv.is_int64())   return static_cast<double>(jv.as_int64());
+            if (jv.is_uint64())  return static_cast<double>(jv.as_uint64());
+            if (jv.is_string())  return std::stod(std::string(jv.as_string()));
+            return 0.0;
+        }
+
+        template <class T>
+        T as_integral_or_string(boost::json::value const& jv) {
+            if (jv.is_int64()) {
+                return static_cast<T>(jv.as_int64());
+            }
+            if (jv.is_uint64()) {
+                return static_cast<T>(jv.as_uint64());
+            }
+            if (jv.is_double()) {
+                return static_cast<T>(jv.as_double());
+            }
+            if (jv.is_string()) {
+                if constexpr (std::is_signed_v<T>) {
+                    return static_cast<T>(std::stoll(std::string(jv.as_string())));
+                } else {
+                    return static_cast<T>(std::stoull(std::string(jv.as_string())));
+                }
+            }
+            return T{};
+        }
+
         template <class T>
         void json_value_from_described(boost::json::object& obj, T const& value) {
             using Members = boost::describe::describe_members<
@@ -373,18 +403,17 @@ namespace polymarket::clob {
 
                     using MemberType = std::remove_cv_t<
                         std::remove_reference_t<decltype(value.*D.pointer)>>;
-                    value.*D.pointer = boost::json::value_to<MemberType>(*member);
+
+                    if constexpr (std::is_same_v<MemberType, double>) {
+                        value.*D.pointer = as_number_or_string(*member);
+                    } else if constexpr (std::is_integral_v<MemberType> &&
+                                         !std::is_same_v<MemberType, bool>) {
+                        value.*D.pointer = as_integral_or_string<MemberType>(*member);
+                    } else {
+                        value.*D.pointer = boost::json::value_to<MemberType>(*member);
+                    }
                 }
             });
-        }
-
-        // Read a field that may arrive as either a JSON number or a quoted string.
-        inline double as_number_or_string(boost::json::value const& jv) {
-            if (jv.is_double())  return jv.as_double();
-            if (jv.is_int64())   return static_cast<double>(jv.as_int64());
-            if (jv.is_uint64())  return static_cast<double>(jv.as_uint64());
-            if (jv.is_string())  return std::stod(std::string(jv.as_string()));
-            return 0.0;
         }
     }
 

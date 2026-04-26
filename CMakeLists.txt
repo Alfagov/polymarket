@@ -83,6 +83,8 @@ if (POLYMARKET_BUILD_TESTS)
             src/data_types.h)
 
     target_include_directories(gamma_client_tests PRIVATE src tests)
+    target_compile_definitions(gamma_client_tests PRIVATE
+            POLYMARKET_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
 
     target_link_libraries(gamma_client_tests PRIVATE
             GTest::gtest_main

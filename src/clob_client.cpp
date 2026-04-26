@@ -42,6 +42,38 @@ namespace polymarket::clob {
             return json::serialize(arr);
         }
 
+        TokenPrices parse_token_prices(const std::string &body) {
+            TokenPrices prices;
+            const auto parsed = json::parse(body);
+            const auto *obj = parsed.if_object();
+            if (!obj) return prices;
+
+            for (const auto &item : *obj) {
+                prices.emplace(std::string(item.key()), detail::as_number_or_string(item.value()));
+            }
+            return prices;
+        }
+
+        TokenSidePrices parse_token_side_prices(const std::string &body) {
+            TokenSidePrices prices;
+            const auto parsed = json::parse(body);
+            const auto *obj = parsed.if_object();
+            if (!obj) return prices;
+
+            for (const auto &token_item : *obj) {
+                const auto *side_obj = token_item.value().if_object();
+                if (!side_obj) continue;
+
+                for (const auto &side_item : *side_obj) {
+                    SidePriceQuote quote;
+                    quote.side = trade_side_from_string(side_item.key());
+                    quote.price = detail::as_number_or_string(side_item.value());
+                    prices[std::string(token_item.key())] = quote;
+                }
+            }
+            return prices;
+        }
+
         // Drain cursor-paginated endpoints. Stops when next_cursor is empty or "LTE=".
         template <class T>
         std::vector<T> drain_pages(HttpClient &http, const std::string &base_path) {
@@ -144,7 +176,7 @@ namespace polymarket::clob {
 
         const auto response = http_.post("/prices", make_token_side_array(token_ids, sides));
         if (!response.ok()) throw_http(response);
-        return json::value_to<TokenSidePrices>(json::parse(response.body));
+        return parse_token_side_prices(response.body);
     }
 
     double ClobClient::fetch_midpoint_price(const std::string &token_id) {
@@ -157,7 +189,7 @@ namespace polymarket::clob {
     TokenPrices ClobClient::fetch_midpoint_prices(const std::vector<std::string> &token_ids) {
         const auto response = http_.post("/midpoints", make_token_array(token_ids));
         if (!response.ok()) throw_http(response);
-        return json::value_to<TokenPrices>(json::parse(response.body));
+        return parse_token_prices(response.body);
     }
 
     double ClobClient::fetch_spread(const std::string &token_id) {
@@ -170,7 +202,7 @@ namespace polymarket::clob {
     TokenPrices ClobClient::fetch_spreads(const std::vector<std::string> &token_ids) {
         const auto response = http_.post("/spreads", make_token_array(token_ids));
         if (!response.ok()) throw_http(response);
-        return json::value_to<TokenPrices>(json::parse(response.body));
+        return parse_token_prices(response.body);
     }
 
     LastTradePriceResponse ClobClient::fetch_last_traded_price(const std::string &token_id) {
@@ -314,7 +346,7 @@ namespace polymarket::clob {
     // Geoblock (different host)
     // ============================================================
     GeoblockResponse ClobClient::check_geoblock() {
-        http_.set_base_url("https://polymarket.com");
+        http_.set_base_url(config_.polymarket_url);
         const auto response = http_.get("/api/geoblock");
         http_.set_base_url(config_.clob_rest_url);
         if (!response.ok()) throw_http(response);
@@ -331,6 +363,10 @@ namespace polymarket::clob {
                                              date, maker_address);
         const auto response = http_.get(path);
         if (!response.ok()) throw_http(response);
-        return json::value_to<std::vector<MakerRebates>>(json::parse(response.body));
+        const auto parsed = json::parse(response.body);
+        if (parsed.is_null()) {
+            return {};
+        }
+        return json::value_to<std::vector<MakerRebates>>(parsed);
     }
 }

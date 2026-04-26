@@ -24,7 +24,7 @@ int main() {
 
 
     auto clob_client = clob::ClobClient(cfg);
-    auto mkts = clob_client.fetch_all_simplified_markets();
+    auto mkts = clob_client.fetch_all_sampling_simplified_markets();
     auto spread = clob_client.fetch_spread(mkts[0].tokens[0].token_id);
 
     std::cout << "SPREAD: " << spread << std::endl;

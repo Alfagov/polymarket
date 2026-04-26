@@ -1,9 +1,16 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <memory>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 
+#include "clob_client.h"
+#include "data_client.h"
 #include "gamma_client.h"
 #include "mock_http_server.h"
 #include "types.h"
@@ -11,6 +18,8 @@
 namespace {
 
 using polymarket::APIConfig;
+using polymarket::clob::ClobClient;
+using polymarket::data::DataClient;
 using polymarket::gamma::GammaClient;
 using polymarket::gamma::MarketParameters;
 using polymarket::gamma::EventParameters;
@@ -22,14 +31,36 @@ constexpr int kLiveEventId = 2890;
 constexpr std::string_view kLiveEventSlug =
     "nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup";
 constexpr std::string_view kLiveMarketId = "239826";
+constexpr int kCommentEventId = 10366;
+constexpr std::string_view kCommentId = "27526";
+constexpr std::string_view kCommentUserAddress =
+    "0x47e72a14b695174062396a3d7d91f109ce672e20";
+constexpr std::string_view kPublicProfileAddress =
+    "0xecdbd79566a25693b9971c48d7de84bc05f7da79";
+constexpr std::string_view kTagId = "100215";
+constexpr std::string_view kTagSlug = "all";
+constexpr std::string_view kSeriesId = "11286";
+constexpr std::string_view kSeriesSlug = "power-slap";
+constexpr std::string_view kClobConditionId =
+    "0x5eed579ff6763914d78a966c83473ba2485ac8910d0a0914eef6d9fcb33085de";
+constexpr std::string_view kClobTokenId =
+    "73470541315377973562501025254719659796416871135081220986683321361000395461644";
+constexpr std::string_view kActiveClobConditionId =
+    "0x004230fb1f54a139d50ba2041e062a01461c931a6725ce482e3a9ab61b2925bb";
+constexpr std::string_view kActiveClobTokenId =
+    "69422147515888934539342749343952767069189843320299332157580167457035825622340";
+constexpr std::string_view kActiveClobNoTokenId =
+    "110140034559013996398860253157541589571780375034092711496574418799581677182004";
 
-constexpr std::string_view kLiveEventResponse = R"json({"id":"2890","ticker":"nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup","slug":"nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup","title":"NBA: Will the Mavericks beat the Grizzlies by more than 5.5 points in their December 4 matchup?","description":"In the upcoming NBA game, scheduled for December 4:\n\nIf the Dallas Mavericks win by over 5.5 points, the market will resolve to \u201cYes\u201d.\n\nIf the Memphis Grizzlies lose by less than 5.5 points or win, the market will resolve \u201cNo.\u201d \n\nIf the game is not completed by December 11, 2021, the market will resolve 50-50.","resolutionSource":"https://www.nba.com/games","startDate":"2021-12-04T00:00:00Z","creationDate":"2021-12-04T00:00:00Z","endDate":"2021-12-04T00:00:00Z","image":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-543e7263-67da-4905-8732-cd3f220ae751.png","icon":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-543e7263-67da-4905-8732-cd3f220ae751.png","active":true,"closed":true,"archived":false,"new":false,"featured":false,"restricted":false,"liquidity":0,"volume":1335.05,"openInterest":0,"sortBy":"ascending","category":"Sports","published_at":"2022-07-27 14:40:02.064+00","createdAt":"2022-07-27T14:40:02.074Z","updatedAt":"2026-04-15T17:43:00.69317Z","competitive":0,"volume24hr":0,"volume1wk":0,"volume1mo":0,"volume1yr":0,"liquidityAmm":0,"liquidityClob":0,"commentCount":8125,"markets":[{"id":"239826","question":"NBA: Will the Mavericks beat the Grizzlies by more than 5.5 points in their December 4 matchup?","conditionId":"0x064d33e3f5703792aafa92bfb0ee10e08f461b1b34c02c1f02671892ede1609a","slug":"nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup","resolutionSource":"https://www.nba.com/games","endDate":"2021-12-04T00:00:00Z","category":"Sports","liquidity":"50.000009","startDate":"2021-12-04T19:35:03.796Z","fee":"20000000000000000","image":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-aa2992d1-38df-404a-9190-49a909775014.png","icon":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-aa2992d1-38df-404a-9190-49a909775014.png","description":"In the upcoming NBA game, scheduled for December 4:\n\nIf the Dallas Mavericks win by over 5.5 points, the market will resolve to \u201cYes\u201d.\n\nIf the Memphis Grizzlies lose by less than 5.5 points or win, the market will resolve \u201cNo.\u201d \n\nIf the game is not completed by December 11, 2021, the market will resolve 50-50.","outcomes":"[\"Yes\", \"No\"]","outcomePrices":"[\"0.0000004113679809846114013590098187297978\", \"0.9999995886320190153885986409901813\"]","volume":"1335.045385","active":true,"marketType":"normal","closed":true,"marketMakerAddress":"0x9c568Ce9a316e7CF9bCCA352b409dfDdCD9b2C08","updatedBy":15,"createdAt":"2021-12-04T10:33:13.541Z","updatedAt":"2024-04-24T23:35:51.063381Z","closedTime":"2021-12-05 20:37:01+00","wideFormat":false,"new":false,"sentDiscord":false,"featured":false,"submitted_by":"0x790A4485e5198763C0a34272698ed0cd9506949B","twitterCardLocation":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup.png?1638736245595","twitterCardLastRefreshed":"1638736245595","archived":false,"resolvedBy":"0x0dD333859cF16942dd333D7570D839b8946Ac221","restricted":false,"volumeNum":1335.05,"liquidityNum":50,"endDateIso":"2021-12-04","startDateIso":"2021-12-04","hasReviewedDates":true,"readyForCron":true,"volume24hr":0,"volume1wk":0,"volume1mo":0,"volume1yr":0,"clobTokenIds":"[\"28182404005967940652495463228537840901055649726248190462854914416579180110833\", \"47044845753450022047436429968808601130811164131571549682541703866165095016290\"]","fpmmLive":true,"volume1wkAmm":0,"volume1moAmm":0,"volume1yrAmm":0,"volume1wkClob":0,"volume1moClob":0,"volume1yrClob":0,"creator":"","ready":false,"funded":false,"cyom":false,"competitive":0,"pagerDutyNotificationEnabled":false,"approved":true,"rewardsMinSize":0,"rewardsMaxSpread":0,"spread":1,"oneDayPriceChange":0,"oneHourPriceChange":0,"oneWeekPriceChange":0,"oneMonthPriceChange":0,"oneYearPriceChange":0,"lastTradePrice":0,"bestBid":0,"bestAsk":1,"clearBookOnStart":true,"manualActivation":false,"negRiskOther":false,"umaResolutionStatuses":"[]","pendingDeployment":false,"deploying":false,"rfqEnabled":false,"holdingRewardsEnabled":false,"feesEnabled":false,"requiresTranslation":false,"feeType":null}],"series":[{"id":"2","ticker":"nba","slug":"nba","title":"NBA","seriesType":"single","recurrence":"daily","image":"https://polymarket-upload.s3.us-east-2.amazonaws.com/super+cool+basketball+in+red+and+blue+wow.png","icon":"https://polymarket-upload.s3.us-east-2.amazonaws.com/super+cool+basketball+in+red+and+blue+wow.png","layout":"default","active":true,"closed":false,"archived":false,"new":false,"featured":false,"restricted":true,"publishedAt":"2023-01-30 17:13:39.006+00","createdBy":"15","updatedBy":"15","createdAt":"2022-10-13T00:36:01.131Z","updatedAt":"2026-04-21T20:27:45.300704Z","commentsEnabled":false,"competitive":"0","volume24hr":11.073004,"startDate":"2021-01-01T17:00:00Z","commentCount":6274,"requiresTranslation":false}],"tags":[{"id":"100215","label":"All","slug":"all","forceShow":false,"updatedAt":"2026-04-17T20:23:54.340488Z","requiresTranslation":false}],"cyom":false,"closedTime":"2022-07-27T14:40:02.074Z","showAllOutcomes":false,"showMarketImages":true,"enableNegRisk":false,"seriesSlug":"nba","negRiskAugmented":false,"pendingDeployment":false,"deploying":false,"requiresTranslation":false,"eventMetadata":{"context_requires_regen":true}})json";
-constexpr std::string_view kLiveEventTagsResponse =
-    R"json([{"id":"100215","label":"All","slug":"all","forceShow":false,"updatedAt":"2026-04-17T20:23:54.340488Z","requiresTranslation":false}])json";
-constexpr std::string_view kLiveMarketResponse = R"json({"id":"239826","question":"NBA: Will the Mavericks beat the Grizzlies by more than 5.5 points in their December 4 matchup?","conditionId":"0x064d33e3f5703792aafa92bfb0ee10e08f461b1b34c02c1f02671892ede1609a","slug":"nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup","resolutionSource":"https://www.nba.com/games","endDate":"2021-12-04T00:00:00Z","category":"Sports","liquidity":"50.000009","startDate":"2021-12-04T19:35:03.796Z","fee":"20000000000000000","image":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-aa2992d1-38df-404a-9190-49a909775014.png","icon":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-aa2992d1-38df-404a-9190-49a909775014.png","description":"In the upcoming NBA game, scheduled for December 4:\n\nIf the Dallas Mavericks win by over 5.5 points, the market will resolve to \u201cYes\u201d.\n\nIf the Memphis Grizzlies lose by less than 5.5 points or win, the market will resolve \u201cNo.\u201d \n\nIf the game is not completed by December 11, 2021, the market will resolve 50-50.","outcomes":"[\"Yes\", \"No\"]","outcomePrices":"[\"0.0000004113679809846114013590098187297978\", \"0.9999995886320190153885986409901813\"]","volume":"1335.045385","active":true,"marketType":"normal","closed":true,"marketMakerAddress":"0x9c568Ce9a316e7CF9bCCA352b409dfDdCD9b2C08","updatedBy":15,"createdAt":"2021-12-04T10:33:13.541Z","updatedAt":"2024-04-24T23:35:51.063381Z","closedTime":"2021-12-05 20:37:01+00","wideFormat":false,"new":false,"sentDiscord":false,"featured":false,"submitted_by":"0x790A4485e5198763C0a34272698ed0cd9506949B","twitterCardLocation":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup.png?1638736245595","twitterCardLastRefreshed":"1638736245595","archived":false,"resolvedBy":"0x0dD333859cF16942dd333D7570D839b8946Ac221","restricted":false,"volumeNum":1335.05,"liquidityNum":50,"endDateIso":"2021-12-04","startDateIso":"2021-12-04","hasReviewedDates":true,"readyForCron":true,"volume24hr":0,"volume1wk":0,"volume1mo":0,"volume1yr":0,"clobTokenIds":"[\"28182404005967940652495463228537840901055649726248190462854914416579180110833\", \"47044845753450022047436429968808601130811164131571549682541703866165095016290\"]","fpmmLive":true,"volume1wkAmm":0,"volume1moAmm":0,"volume1yrAmm":0,"volume1wkClob":0,"volume1moClob":0,"volume1yrClob":0,"creator":"","ready":false,"funded":false,"cyom":false,"competitive":0,"pagerDutyNotificationEnabled":false,"approved":true,"rewardsMinSize":0,"rewardsMaxSpread":0,"spread":1,"oneDayPriceChange":0,"oneHourPriceChange":0,"oneWeekPriceChange":0,"oneMonthPriceChange":0,"oneYearPriceChange":0,"lastTradePrice":0,"bestBid":0,"bestAsk":1,"clearBookOnStart":true,"manualActivation":false,"negRiskOther":false,"umaResolutionStatuses":"[]","pendingDeployment":false,"deploying":false,"rfqEnabled":false,"holdingRewardsEnabled":false,"feesEnabled":false,"requiresTranslation":false,"feeType":null})json";
-constexpr std::string_view kLiveMarketBySlugResponse = R"json({"id":"239826","question":"NBA: Will the Mavericks beat the Grizzlies by more than 5.5 points in their December 4 matchup?","conditionId":"0x064d33e3f5703792aafa92bfb0ee10e08f461b1b34c02c1f02671892ede1609a","slug":"nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup","resolutionSource":"https://www.nba.com/games","endDate":"2021-12-04T00:00:00Z","category":"Sports","liquidity":"50.000009","startDate":"2021-12-04T19:35:03.796Z","fee":"20000000000000000","image":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-aa2992d1-38df-404a-9190-49a909775014.png","icon":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-aa2992d1-38df-404a-9190-49a909775014.png","description":"In the upcoming NBA game, scheduled for December 4:\n\nIf the Dallas Mavericks win by over 5.5 points, the market will resolve to \u201cYes\u201d.\n\nIf the Memphis Grizzlies lose by less than 5.5 points or win, the market will resolve \u201cNo.\u201d \n\nIf the game is not completed by December 11, 2021, the market will resolve 50-50.","outcomes":"[\"Yes\", \"No\"]","outcomePrices":"[\"0.0000004113679809846114013590098187297978\", \"0.9999995886320190153885986409901813\"]","volume":"1335.045385","active":true,"marketType":"normal","closed":true,"marketMakerAddress":"0x9c568Ce9a316e7CF9bCCA352b409dfDdCD9b2C08","updatedBy":15,"createdAt":"2021-12-04T10:33:13.541Z","updatedAt":"2024-04-24T23:35:51.063381Z","closedTime":"2021-12-05 20:37:01+00","wideFormat":false,"new":false,"sentDiscord":false,"featured":false,"submitted_by":"0x790A4485e5198763C0a34272698ed0cd9506949B","twitterCardLocation":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup.png?1638736245595","twitterCardLastRefreshed":"1638736245595","archived":false,"resolvedBy":"0x0dD333859cF16942dd333D7570D839b8946Ac221","restricted":false,"volumeNum":1335.05,"liquidityNum":50,"endDateIso":"2021-12-04","startDateIso":"2021-12-04","hasReviewedDates":true,"readyForCron":true,"volume24hr":0,"volume1wk":0,"volume1mo":0,"volume1yr":0,"clobTokenIds":"[\"28182404005967940652495463228537840901055649726248190462854914416579180110833\", \"47044845753450022047436429968808601130811164131571549682541703866165095016290\"]","fpmmLive":true,"volume1wkAmm":0,"volume1moAmm":0,"volume1yrAmm":0,"volume1wkClob":0,"volume1moClob":0,"volume1yrClob":0,"events":[{"id":"2890","ticker":"nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup","slug":"nba-will-the-mavericks-beat-the-grizzlies-by-more-than-5pt5-points-in-their-december-4-matchup","title":"NBA: Will the Mavericks beat the Grizzlies by more than 5.5 points in their December 4 matchup?","description":"In the upcoming NBA game, scheduled for December 4:\n\nIf the Dallas Mavericks win by over 5.5 points, the market will resolve to \u201cYes\u201d.\n\nIf the Memphis Grizzlies lose by less than 5.5 points or win, the market will resolve \u201cNo.\u201d \n\nIf the game is not completed by December 11, 2021, the market will resolve 50-50.","resolutionSource":"https://www.nba.com/games","startDate":"2021-12-04T00:00:00Z","creationDate":"2021-12-04T00:00:00Z","endDate":"2021-12-04T00:00:00Z","image":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-543e7263-67da-4905-8732-cd3f220ae751.png","icon":"https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-will-the-mavericks-beat-the-grizzlies-by-more-than-55-points-in-their-december-4-matchup-543e7263-67da-4905-8732-cd3f220ae751.png","active":true,"closed":true,"archived":false,"new":false,"featured":false,"restricted":false,"liquidity":0,"volume":1335.05,"openInterest":0,"sortBy":"ascending","category":"Sports","published_at":"2022-07-27 14:40:02.064+00","createdAt":"2022-07-27T14:40:02.074Z","updatedAt":"2026-04-15T17:43:00.69317Z","competitive":0,"volume24hr":0,"volume1wk":0,"volume1mo":0,"volume1yr":0,"liquidityAmm":0,"liquidityClob":0,"commentCount":8125,"cyom":false,"closedTime":"2022-07-27T14:40:02.074Z","showAllOutcomes":false,"showMarketImages":true,"enableNegRisk":false,"seriesSlug":"nba","negRiskAugmented":false,"pendingDeployment":false,"deploying":false,"requiresTranslation":false,"eventMetadata":{"context_requires_regen":true}}],"creator":"","ready":false,"funded":false,"cyom":false,"competitive":0,"pagerDutyNotificationEnabled":false,"approved":true,"rewardsMinSize":0,"rewardsMaxSpread":0,"spread":1,"oneDayPriceChange":0,"oneHourPriceChange":0,"oneWeekPriceChange":0,"oneMonthPriceChange":0,"oneYearPriceChange":0,"lastTradePrice":0,"bestBid":0,"bestAsk":1,"clearBookOnStart":true,"manualActivation":false,"negRiskOther":false,"umaResolutionStatuses":"[]","pendingDeployment":false,"deploying":false,"rfqEnabled":false,"holdingRewardsEnabled":false,"feesEnabled":false,"requiresTranslation":false,"feeType":null})json";
-constexpr std::string_view kLiveMarketTagsResponse =
-    R"json([{"id":"100215","label":"All","slug":"all","forceShow":false,"updatedAt":"2026-04-17T20:23:54.340488Z","requiresTranslation":false}])json";
+std::string fixture(std::string_view relative_path) {
+    const auto path =
+        std::filesystem::path(POLYMARKET_TEST_FIXTURE_DIR) / std::string(relative_path);
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        throw std::runtime_error("failed to open fixture: " + path.string());
+    }
+    return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+}
 
 class GammaClientTest : public ::testing::Test {
 protected:
@@ -128,7 +159,7 @@ TEST_F(GammaClientTest, FetchAllEventsStopsOnEmptyPage) {
 }
 
 TEST_F(GammaClientTest, FetchEventByIdHitsCorrectPath) {
-    server_.enqueue({200, std::string(kLiveEventResponse)});
+    server_.enqueue({200, fixture("gamma/event_2890.json")});
 
     auto ev = client_->fetch_event_by_id(kLiveEventId);
 
@@ -138,7 +169,7 @@ TEST_F(GammaClientTest, FetchEventByIdHitsCorrectPath) {
 }
 
 TEST_F(GammaClientTest, FetchEventBySlugHitsCorrectPath) {
-    server_.enqueue({200, std::string(kLiveEventResponse)});
+    server_.enqueue({200, fixture("gamma/event_2890.json")});
 
     auto ev = client_->fetch_event_by_slug(std::string(kLiveEventSlug));
 
@@ -149,7 +180,7 @@ TEST_F(GammaClientTest, FetchEventBySlugHitsCorrectPath) {
 }
 
 TEST_F(GammaClientTest, FetchEventsTagsHitsCorrectPathAndParses) {
-    server_.enqueue({200, std::string(kLiveEventTagsResponse)});
+    server_.enqueue({200, fixture("gamma/event_2890_tags.json")});
 
     auto tags = client_->fetch_events_tags(kLiveEventId);
 
@@ -203,7 +234,7 @@ TEST_F(GammaClientTest, FetchAllMarketsPaginates) {
 }
 
 TEST_F(GammaClientTest, FetchMarketByIdHitsPath) {
-    server_.enqueue({200, std::string(kLiveMarketResponse)});
+    server_.enqueue({200, fixture("gamma/market_239826.json")});
 
     auto m = client_->fetch_market_by_id(std::string(kLiveMarketId));
 
@@ -213,7 +244,7 @@ TEST_F(GammaClientTest, FetchMarketByIdHitsPath) {
 }
 
 TEST_F(GammaClientTest, FetchMarketBySlugHitsPath) {
-    server_.enqueue({200, std::string(kLiveMarketBySlugResponse)});
+    server_.enqueue({200, fixture("gamma/market_239826_by_slug.json")});
 
     auto m = client_->fetch_market_by_slug(std::string(kLiveEventSlug));
 
@@ -224,7 +255,7 @@ TEST_F(GammaClientTest, FetchMarketBySlugHitsPath) {
 }
 
 TEST_F(GammaClientTest, FetchMarketTagsByIdParsesTags) {
-    server_.enqueue({200, std::string(kLiveMarketTagsResponse)});
+    server_.enqueue({200, fixture("gamma/market_239826_tags.json")});
 
     auto tags = client_->fetch_market_tags_by_id(std::string(kLiveMarketId));
 
@@ -239,9 +270,7 @@ TEST_F(GammaClientTest, FetchMarketTagsByIdParsesTags) {
 // ---------------------------------------------------------------------------
 
 TEST_F(GammaClientTest, FetchMarketTopHoldersBuildsQueryAndParses) {
-    server_.enqueue({200, R"([{"token":"t1","holders":[
-        {"proxyWallet":"0x1","amount":10.5,"outcomeIndex":0}
-    ]}])"});
+    server_.enqueue({200, fixture("gamma/market_top_holders_sample.json")});
 
     auto res = client_->fetch_market_top_holders({"tokenA", "tokenB"}, 5, 2);
 
@@ -258,7 +287,7 @@ TEST_F(GammaClientTest, FetchMarketTopHoldersBuildsQueryAndParses) {
 }
 
 TEST_F(GammaClientTest, FetchMarketTopHoldersUsesDefaults) {
-    server_.enqueue({200, R"([])"});
+    server_.enqueue({200, fixture("gamma/empty_array.json")});
     client_->fetch_market_top_holders({"tok"});
 
     const auto& req = server_.last_request();
@@ -267,29 +296,26 @@ TEST_F(GammaClientTest, FetchMarketTopHoldersUsesDefaults) {
 }
 
 TEST_F(GammaClientTest, FetchMarketOpenInterestsParses) {
-    server_.enqueue({200, R"([{"market":"m1","value":123.5},
-                              {"market":"m2","value":0.0}])"});
+    server_.enqueue({200, fixture(
+        "data/open_interest_0x5eed579ff6763914d78a966c83473ba2485ac8910d0a0914eef6d9fcb33085de.json")});
 
-    auto ois = client_->fetch_market_open_interests({"m1", "m2"});
+    auto ois = client_->fetch_market_open_interests({std::string(kClobConditionId)});
 
-    ASSERT_EQ(ois.size(), 2u);
-    EXPECT_EQ(ois[0].market, "m1");
-    EXPECT_DOUBLE_EQ(ois[0].value, 123.5);
-    EXPECT_TRUE(target_has(server_.last_request().target, "/oi?market=m1,m2"));
+    ASSERT_EQ(ois.size(), 1u);
+    EXPECT_EQ(ois[0].market, kClobConditionId);
+    EXPECT_DOUBLE_EQ(ois[0].value, 0.0);
+    EXPECT_EQ(server_.last_request().target, "/oi?market=" + std::string(kClobConditionId));
 }
 
 TEST_F(GammaClientTest, FetchEventLiveVolumesParses) {
-    server_.enqueue({200, R"([{"total":42.0,"markets":[
-        {"market":"mm","value":1.0}
-    ]}])"});
+    server_.enqueue({200, fixture("data/live_volume_2890.json")});
 
-    auto vols = client_->fetch_event_live_volumes(7);
+    auto vols = client_->fetch_event_live_volumes(kLiveEventId);
 
     ASSERT_EQ(vols.size(), 1u);
-    EXPECT_DOUBLE_EQ(vols[0].total, 42.0);
-    ASSERT_EQ(vols[0].markets.size(), 1u);
-    EXPECT_EQ(vols[0].markets[0].market, "mm");
-    EXPECT_EQ(server_.last_request().target, "/live-volume?id=7");
+    EXPECT_DOUBLE_EQ(vols[0].total, 0.0);
+    EXPECT_TRUE(vols[0].markets.empty());
+    EXPECT_EQ(server_.last_request().target, "/live-volume?id=2890");
 }
 
 // ---------------------------------------------------------------------------
@@ -301,7 +327,7 @@ TEST_F(GammaClientTest, DataApiCallDoesNotCorruptBaseUrlOnSuccess) {
     // Both point to the same mock, but the test still validates that a
     // subsequent /events path is reachable and reaches a /events/... target.
     server_.enqueue({200, R"([])"});              // holders
-    server_.enqueue({200, std::string(kLiveEventResponse)});      // event-by-id
+    server_.enqueue({200, fixture("gamma/event_2890.json")});     // event-by-id
 
     client_->fetch_market_top_holders({"tok"});
     auto ev = client_->fetch_event_by_id(kLiveEventId);
@@ -313,7 +339,7 @@ TEST_F(GammaClientTest, DataApiCallDoesNotCorruptBaseUrlOnSuccess) {
 
 TEST_F(GammaClientTest, DataApiCallDoesNotCorruptBaseUrlOnFailure) {
     server_.enqueue({502, "bad gateway"});        // holders fails
-    server_.enqueue({200, std::string(kLiveEventResponse)});      // event-by-id succeeds
+    server_.enqueue({200, fixture("gamma/event_2890.json")});     // event-by-id succeeds
 
     EXPECT_THROW(client_->fetch_market_top_holders({"tok"}), std::runtime_error);
 
@@ -332,7 +358,7 @@ TEST_F(GammaClientTest, ParametersAreSerializedIntoQueryString) {
 
     EventParameters p;
     p.limit = 25;
-    p.order = {"volume"};
+    p.order = "volume";
     p.ascending = true;
     p.closed = false;
     p.slug = {"foo", "bar"};
@@ -376,6 +402,222 @@ TEST_F(GammaClientTest, OptionalParametersOmittedWhenUnset) {
 }
 
 // ---------------------------------------------------------------------------
+// Additional gamma-api endpoints
+// ---------------------------------------------------------------------------
+
+TEST_F(GammaClientTest, FetchStatusReturnsCapturedStatus) {
+    server_.enqueue({200, fixture("gamma/status.txt"), "text/plain"});
+
+    const auto status = client_->fetch_status();
+
+    EXPECT_EQ(status, "OK");
+    EXPECT_EQ(server_.last_request().target, "/status");
+}
+
+TEST_F(GammaClientTest, FetchTeamsBuildsQueryAndParsesFixture) {
+    server_.enqueue({200, fixture("gamma/teams_nba_limit_1.json")});
+
+    polymarket::gamma::TeamsRequest req;
+    req.limit = 1;
+    req.league = "nba";
+    const auto teams = client_->fetch_teams(req);
+
+    ASSERT_EQ(teams.size(), 1u);
+    EXPECT_EQ(teams[0].league, "nba");
+    EXPECT_EQ(server_.last_request().target, "/teams?limit=1&league=nba");
+}
+
+TEST_F(GammaClientTest, FetchSportsParsesFixture) {
+    server_.enqueue({200, fixture("gamma/sports.json")});
+
+    const auto sports = client_->fetch_sports();
+
+    ASSERT_FALSE(sports.empty());
+    EXPECT_EQ(sports[0].sport, "ncaab");
+    EXPECT_EQ(server_.last_request().target, "/sports");
+}
+
+TEST_F(GammaClientTest, FetchSportsMarketTypesParsesFixture) {
+    server_.enqueue({200, fixture("gamma/sports_market_types.json")});
+
+    const auto response = client_->fetch_sports_market_types();
+
+    EXPECT_NE(std::find(response.marketTypes.begin(), response.marketTypes.end(), "moneyline"),
+              response.marketTypes.end());
+    EXPECT_EQ(server_.last_request().target, "/sports/market-types");
+}
+
+TEST_F(GammaClientTest, FetchTagsBuildsQueryAndParsesFixture) {
+    server_.enqueue({200, fixture("gamma/tags_limit_1.json")});
+
+    polymarket::gamma::TagsRequest req;
+    req.limit = 1;
+    const auto tags = client_->fetch_tags(req);
+
+    ASSERT_EQ(tags.size(), 1u);
+    EXPECT_EQ(tags[0].id, "101867");
+    EXPECT_EQ(server_.last_request().target, "/tags?limit=1");
+}
+
+TEST_F(GammaClientTest, FetchTagByIdParsesFixture) {
+    server_.enqueue({200, fixture("gamma/tag_100215.json")});
+
+    const auto tag = client_->fetch_tag_by_id(std::string(kTagId));
+
+    EXPECT_EQ(tag.id, kTagId);
+    EXPECT_EQ(tag.slug, kTagSlug);
+    EXPECT_EQ(server_.last_request().target, "/tags/100215");
+}
+
+TEST_F(GammaClientTest, FetchTagBySlugParsesFixture) {
+    server_.enqueue({200, fixture("gamma/tag_slug_all.json")});
+
+    const auto tag = client_->fetch_tag_by_slug(std::string(kTagSlug));
+
+    EXPECT_EQ(tag.id, kTagId);
+    EXPECT_EQ(tag.slug, kTagSlug);
+    EXPECT_EQ(server_.last_request().target, "/tags/slug/all");
+}
+
+TEST_F(GammaClientTest, FetchRelatedTagsByIdBuildsQueryAndParsesFixture) {
+    server_.enqueue({200, fixture("gamma/related_tags_100215_all.json")});
+
+    polymarket::gamma::RelatedTagsRequest req;
+    req.status = "all";
+    const auto tags = client_->fetch_related_tags_by_id(std::string(kTagId), req);
+
+    ASSERT_FALSE(tags.empty());
+    EXPECT_EQ(tags[0].id, "34178");
+    EXPECT_EQ(tags[0].rank, 1);
+    EXPECT_EQ(server_.last_request().target, "/tags/100215/related-tags?status=all");
+}
+
+TEST_F(GammaClientTest, FetchRelatedTagsBySlugBuildsQueryAndParsesFixture) {
+    server_.enqueue({200, fixture("gamma/related_tags_slug_all_all.json")});
+
+    polymarket::gamma::RelatedTagsRequest req;
+    req.status = "all";
+    const auto tags = client_->fetch_related_tags_by_slug(std::string(kTagSlug), req);
+
+    ASSERT_FALSE(tags.empty());
+    EXPECT_EQ(tags[0].id, "34178");
+    EXPECT_EQ(tags[0].rank, 1);
+    EXPECT_EQ(server_.last_request().target, "/tags/slug/all/related-tags?status=all");
+}
+
+TEST_F(GammaClientTest, FetchTagsRelatedToTagByIdBuildsQueryAndParsesFixture) {
+    server_.enqueue({200, fixture("gamma/related_tag_records_100215_all.json")});
+
+    polymarket::gamma::RelatedTagsRequest req;
+    req.status = "all";
+    const auto tags = client_->fetch_tags_related_to_tag_by_id(std::string(kTagId), req);
+
+    ASSERT_FALSE(tags.empty());
+    EXPECT_EQ(tags[0].slug, "trump");
+    EXPECT_EQ(server_.last_request().target, "/tags/100215/related-tags/tags?status=all");
+}
+
+TEST_F(GammaClientTest, FetchTagsRelatedToTagBySlugBuildsQueryAndParsesFixture) {
+    server_.enqueue({200, fixture("gamma/related_tag_records_slug_all_all.json")});
+
+    polymarket::gamma::RelatedTagsRequest req;
+    req.status = "all";
+    const auto tags = client_->fetch_tags_related_to_tag_by_slug(std::string(kTagSlug), req);
+
+    ASSERT_FALSE(tags.empty());
+    EXPECT_EQ(tags[0].slug, "trump");
+    EXPECT_EQ(server_.last_request().target, "/tags/slug/all/related-tags/tags?status=all");
+}
+
+TEST_F(GammaClientTest, FetchSeriesBuildsQueryAndParsesFixture) {
+    server_.enqueue({200, fixture("gamma/series_power_slap.json")});
+
+    polymarket::gamma::SeriesListRequest req;
+    req.limit = 1;
+    req.slug = {std::string(kSeriesSlug)};
+    const auto series = client_->fetch_series(req);
+
+    ASSERT_EQ(series.size(), 1u);
+    EXPECT_EQ(series[0].id, kSeriesId);
+    EXPECT_EQ(series[0].slug, kSeriesSlug);
+    EXPECT_EQ(server_.last_request().target, "/series?limit=1&slug=power-slap");
+}
+
+TEST_F(GammaClientTest, FetchSeriesByIdParsesFixture) {
+    server_.enqueue({200, fixture("gamma/series_11286.json")});
+
+    const auto series = client_->fetch_series_by_id(std::string(kSeriesId));
+
+    EXPECT_EQ(series.id, kSeriesId);
+    EXPECT_EQ(series.slug, kSeriesSlug);
+    EXPECT_EQ(server_.last_request().target, "/series/11286");
+}
+
+TEST_F(GammaClientTest, FetchCommentsBuildsQueryAndParsesFixture) {
+    server_.enqueue({200, fixture("gamma/comments_event_10366_limit_1.json")});
+
+    polymarket::gamma::CommentsRequest req;
+    req.parent_entity_type = "Event";
+    req.parent_entity_id = std::to_string(kCommentEventId);
+    req.limit = 1;
+    const auto comments = client_->fetch_comments(req);
+
+    ASSERT_FALSE(comments.empty());
+    EXPECT_EQ(comments[0].id, kCommentId);
+    EXPECT_EQ(comments[0].parentEntityID, kCommentEventId);
+    EXPECT_EQ(server_.last_request().target,
+              "/comments?parent_entity_type=Event&parent_entity_id=10366&limit=1");
+}
+
+TEST_F(GammaClientTest, FetchCommentsByIdParsesFixture) {
+    server_.enqueue({200, fixture("gamma/comments_27526.json")});
+
+    const auto comments = client_->fetch_comments_by_id(std::string(kCommentId));
+
+    ASSERT_FALSE(comments.empty());
+    EXPECT_EQ(comments[0].id, kCommentId);
+    EXPECT_EQ(server_.last_request().target, "/comments/27526");
+}
+
+TEST_F(GammaClientTest, FetchCommentsByUserAddressParsesFixture) {
+    server_.enqueue({200, fixture(
+        "gamma/comments_user_0x47e72a14b695174062396a3d7d91f109ce672e20.json")});
+
+    const auto comments = client_->fetch_comments_by_user_address(std::string(kCommentUserAddress));
+
+    ASSERT_FALSE(comments.empty());
+    EXPECT_EQ(comments[0].userAddress, kCommentUserAddress);
+    EXPECT_EQ(server_.last_request().target,
+              "/comments/user_address/0x47e72a14b695174062396a3d7d91f109ce672e20");
+}
+
+TEST_F(GammaClientTest, FetchPublicProfileBuildsQueryAndParsesFixture) {
+    server_.enqueue({200, fixture(
+        "gamma/public_profile_0xecdbd79566a25693b9971c48d7de84bc05f7da79.json")});
+
+    const auto profile = client_->fetch_public_profile(std::string(kPublicProfileAddress));
+
+    EXPECT_EQ(profile.proxyWallet, kPublicProfileAddress);
+    EXPECT_EQ(profile.name, "BigMike11");
+    EXPECT_EQ(server_.last_request().target,
+              "/public-profile?address=0xecdbd79566a25693b9971c48d7de84bc05f7da79");
+}
+
+TEST_F(GammaClientTest, FetchPublicSearchBuildsQueryAndParsesFixture) {
+    server_.enqueue({200, fixture("gamma/public_search_nba_limit_1.json")});
+
+    polymarket::gamma::SearchRequest req;
+    req.q = "nba";
+    req.limit_per_type = 1;
+    req.page = 1;
+    const auto results = client_->fetch_public_search(req);
+
+    ASSERT_FALSE(results.events.empty());
+    EXPECT_EQ(results.events[0].slug, "nba-dailies-2024-04-21");
+    EXPECT_EQ(server_.last_request().target, "/public-search?q=nba&limit_per_type=1&page=1");
+}
+
+// ---------------------------------------------------------------------------
 // Error surfacing
 // ---------------------------------------------------------------------------
 
@@ -388,6 +630,473 @@ TEST_F(GammaClientTest, FetchAllMarketsPropagatesError) {
 TEST_F(GammaClientTest, FetchEventsTagsThrowsOnError) {
     server_.enqueue({500, "{}"});
     EXPECT_THROW(client_->fetch_events_tags(1), std::runtime_error);
+}
+
+class ClobClientTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        server_.start();
+        config_.clob_rest_url = server_.base_url();
+        config_.polymarket_url = server_.base_url();
+        config_.http_timeout_ms = 2000;
+        client_ = std::make_unique<ClobClient>(config_);
+    }
+
+    void TearDown() override {
+        client_.reset();
+        server_.stop();
+    }
+
+    MockHttpServer server_;
+    APIConfig config_;
+    std::unique_ptr<ClobClient> client_;
+};
+
+TEST_F(ClobClientTest, FetchServerTimeParsesCapturedApiNumber) {
+    server_.enqueue({200, fixture("clob/time.json")});
+
+    const auto server_time = client_->fetch_server_time();
+
+    EXPECT_GT(server_time, 0);
+    EXPECT_EQ(server_.last_request().method, "GET");
+    EXPECT_EQ(server_.last_request().target, "/time");
+}
+
+TEST_F(ClobClientTest, FetchOkReturnsCapturedStatus) {
+    server_.enqueue({200, fixture("clob/ok.json")});
+
+    const auto ok = client_->fetch_ok();
+
+    EXPECT_EQ(ok, "\"OK\"");
+    EXPECT_EQ(server_.last_request().method, "GET");
+    EXPECT_EQ(server_.last_request().target, "/");
+}
+
+TEST_F(ClobClientTest, FetchVersionParsesCapturedVersion) {
+    server_.enqueue({200, fixture("clob/version.json")});
+
+    const auto version = client_->fetch_version();
+
+    EXPECT_EQ(version, 1u);
+    EXPECT_EQ(server_.last_request().target, "/version");
+}
+
+TEST_F(ClobClientTest, FetchOrderBookParsesCapturedBook) {
+    server_.enqueue({200, fixture(
+        "clob/book_69422147515888934539342749343952767069189843320299332157580167457035825622340.json")});
+
+    const auto book = client_->fetch_order_book(std::string(kActiveClobTokenId));
+
+    EXPECT_EQ(book.market, kActiveClobConditionId);
+    EXPECT_EQ(book.asset_id, kActiveClobTokenId);
+    EXPECT_FALSE(book.bids.empty());
+    EXPECT_FALSE(book.asks.empty());
+    EXPECT_GT(book.min_order_size, 0.0);
+    EXPECT_GT(book.tick_size, 0.0);
+    EXPECT_EQ(server_.last_request().target,
+              "/book?token_id=" + std::string(kActiveClobTokenId));
+}
+
+TEST_F(ClobClientTest, FetchOrderBooksPostsTokensAndParsesCapturedBooks) {
+    server_.enqueue({200, fixture(
+        "clob/books_69422147515888934539342749343952767069189843320299332157580167457035825622340.json")});
+
+    const auto books = client_->fetch_order_books({std::string(kActiveClobTokenId)});
+
+    ASSERT_EQ(books.size(), 1u);
+    EXPECT_EQ(books[0].market, kActiveClobConditionId);
+    EXPECT_EQ(server_.last_request().method, "POST");
+    EXPECT_EQ(server_.last_request().target, "/books");
+    EXPECT_EQ(server_.last_request().body,
+              "[{\"token_id\":\"" + std::string(kActiveClobTokenId) + "\"}]");
+}
+
+TEST_F(ClobClientTest, FetchMarketPriceParsesCapturedPrice) {
+    server_.enqueue({200, fixture(
+        "clob/price_69422147515888934539342749343952767069189843320299332157580167457035825622340_buy.json")});
+
+    const auto price = client_->fetch_market_price(std::string(kActiveClobTokenId),
+                                                   polymarket::clob::TradeSide::Buy);
+
+    EXPECT_GT(price, 0.0);
+    EXPECT_EQ(server_.last_request().target,
+              "/price?token_id=" + std::string(kActiveClobTokenId) + "&side=BUY");
+}
+
+TEST_F(ClobClientTest, FetchMarketPricesPostsTokenSidesAndParsesCapturedPrices) {
+    server_.enqueue({200, fixture(
+        "clob/prices_69422147515888934539342749343952767069189843320299332157580167457035825622340_buy.json")});
+
+    const auto prices = client_->fetch_market_prices(
+        {std::string(kActiveClobTokenId)}, {polymarket::clob::TradeSide::Buy});
+
+    ASSERT_EQ(prices.size(), 1u);
+    const auto quote = prices.at(std::string(kActiveClobTokenId));
+    EXPECT_EQ(quote.side, polymarket::clob::TradeSide::Buy);
+    EXPECT_GT(quote.price, 0.0);
+    EXPECT_EQ(server_.last_request().method, "POST");
+    EXPECT_EQ(server_.last_request().target, "/prices");
+    EXPECT_EQ(server_.last_request().body,
+              "[{\"token_id\":\"" + std::string(kActiveClobTokenId) + "\",\"side\":\"BUY\"}]");
+}
+
+TEST_F(ClobClientTest, FetchMidpointPriceParsesCapturedMidpoint) {
+    server_.enqueue({200, fixture(
+        "clob/midpoint_69422147515888934539342749343952767069189843320299332157580167457035825622340.json")});
+
+    const auto midpoint = client_->fetch_midpoint_price(std::string(kActiveClobTokenId));
+
+    EXPECT_GT(midpoint, 0.0);
+    EXPECT_EQ(server_.last_request().target,
+              "/midpoint?token_id=" + std::string(kActiveClobTokenId));
+}
+
+TEST_F(ClobClientTest, FetchMidpointPricesPostsTokensAndParsesCapturedMap) {
+    server_.enqueue({200, fixture(
+        "clob/midpoints_69422147515888934539342749343952767069189843320299332157580167457035825622340.json")});
+
+    const auto midpoints = client_->fetch_midpoint_prices({std::string(kActiveClobTokenId)});
+
+    ASSERT_EQ(midpoints.size(), 1u);
+    EXPECT_GT(midpoints.at(std::string(kActiveClobTokenId)), 0.0);
+    EXPECT_EQ(server_.last_request().target, "/midpoints");
+}
+
+TEST_F(ClobClientTest, FetchSpreadParsesCapturedSpread) {
+    server_.enqueue({200, fixture(
+        "clob/spread_69422147515888934539342749343952767069189843320299332157580167457035825622340.json")});
+
+    const auto spread = client_->fetch_spread(std::string(kActiveClobTokenId));
+
+    EXPECT_GT(spread, 0.0);
+    EXPECT_EQ(server_.last_request().target,
+              "/spread?token_id=" + std::string(kActiveClobTokenId));
+}
+
+TEST_F(ClobClientTest, FetchSpreadsPostsTokensAndParsesCapturedMap) {
+    server_.enqueue({200, fixture(
+        "clob/spreads_69422147515888934539342749343952767069189843320299332157580167457035825622340.json")});
+
+    const auto spreads = client_->fetch_spreads({std::string(kActiveClobTokenId)});
+
+    ASSERT_EQ(spreads.size(), 1u);
+    EXPECT_GT(spreads.at(std::string(kActiveClobTokenId)), 0.0);
+    EXPECT_EQ(server_.last_request().target, "/spreads");
+}
+
+TEST_F(ClobClientTest, FetchLastTradedPriceParsesCapturedTrade) {
+    server_.enqueue({200, fixture(
+        "clob/last_trade_price_69422147515888934539342749343952767069189843320299332157580167457035825622340.json")});
+
+    const auto trade = client_->fetch_last_traded_price(std::string(kActiveClobTokenId));
+
+    EXPECT_GT(trade.price, 0.0);
+    EXPECT_EQ(trade.side, polymarket::clob::TradeSide::Sell);
+    EXPECT_EQ(server_.last_request().target,
+              "/last-trade-price?token_id=" + std::string(kActiveClobTokenId));
+}
+
+TEST_F(ClobClientTest, FetchLastTradedPricesPostsTokensAndParsesCapturedTrades) {
+    server_.enqueue({200, fixture(
+        "clob/last_trades_prices_69422147515888934539342749343952767069189843320299332157580167457035825622340.json")});
+
+    const auto trades = client_->fetch_last_traded_prices({std::string(kActiveClobTokenId)});
+
+    ASSERT_EQ(trades.size(), 1u);
+    EXPECT_EQ(trades[0].token_id, kActiveClobTokenId);
+    EXPECT_GT(trades[0].price, 0.0);
+    EXPECT_EQ(server_.last_request().method, "POST");
+    EXPECT_EQ(server_.last_request().target, "/last-trades-prices");
+}
+
+TEST_F(ClobClientTest, FetchPricesHistoryBuildsIntervalQueryAndParsesCapturedHistory) {
+    server_.enqueue({200, fixture(
+        "clob/prices_history_69422147515888934539342749343952767069189843320299332157580167457035825622340_1h_60.json")});
+
+    polymarket::clob::PriceHistoryRequest req;
+    req.market = std::string(kActiveClobTokenId);
+    req.interval = polymarket::clob::PriceHistoryInterval::OneHour;
+    req.fidelity = 60;
+    const auto history = client_->fetch_prices_history(req);
+
+    ASSERT_FALSE(history.history.empty());
+    EXPECT_GT(history.history[0].t, 0);
+    EXPECT_GT(history.history[0].p, 0.0);
+    EXPECT_EQ(server_.last_request().target,
+              "/prices-history?market=" + std::string(kActiveClobTokenId) + "&interval=1h&fidelity=60");
+}
+
+TEST_F(ClobClientTest, FetchFeeRateParsesCapturedFeeRate) {
+    server_.enqueue({200, fixture(
+        "clob/fee_rate_69422147515888934539342749343952767069189843320299332157580167457035825622340.json")});
+
+    const auto fee_rate = client_->fetch_fee_rate(std::string(kActiveClobTokenId));
+
+    EXPECT_EQ(fee_rate, 0u);
+    EXPECT_EQ(server_.last_request().target,
+              "/fee-rate?token_id=" + std::string(kActiveClobTokenId));
+}
+
+TEST_F(ClobClientTest, FetchTickSizeParsesCapturedTickSize) {
+    server_.enqueue({200, fixture(
+        "clob/tick_size_69422147515888934539342749343952767069189843320299332157580167457035825622340.json")});
+
+    const auto tick_size = client_->fetch_tick_size(std::string(kActiveClobTokenId));
+
+    EXPECT_GT(tick_size, 0.0);
+    EXPECT_EQ(server_.last_request().target,
+              "/tick-size?token_id=" + std::string(kActiveClobTokenId));
+}
+
+TEST_F(ClobClientTest, FetchNegRiskParsesCapturedNegRisk) {
+    server_.enqueue({200, fixture(
+        "clob/neg_risk_69422147515888934539342749343952767069189843320299332157580167457035825622340.json")});
+
+    const auto neg_risk = client_->fetch_neg_risk(std::string(kActiveClobTokenId));
+
+    EXPECT_FALSE(neg_risk);
+    EXPECT_EQ(server_.last_request().target,
+              "/neg-risk?token_id=" + std::string(kActiveClobTokenId));
+}
+
+TEST_F(ClobClientTest, FetchClobMarketInfoParsesCapturedCompactMarket) {
+    server_.enqueue({200, fixture(
+        "clob/clob_market_info_0x004230fb1f54a139d50ba2041e062a01461c931a6725ce482e3a9ab61b2925bb.json")});
+
+    const auto market = client_->fetch_clob_market_info(std::string(kActiveClobConditionId));
+
+    EXPECT_EQ(market.condition_id, kActiveClobConditionId);
+    EXPECT_DOUBLE_EQ(market.min_order_size, 5.0);
+    EXPECT_DOUBLE_EQ(market.min_tick_size, 0.01);
+    ASSERT_EQ(market.tokens.size(), 2u);
+    EXPECT_EQ(market.tokens[0].token_id, kActiveClobTokenId);
+    EXPECT_EQ(market.tokens[1].token_id, kActiveClobNoTokenId);
+    EXPECT_EQ(server_.last_request().target,
+              "/clob-markets/" + std::string(kActiveClobConditionId));
+}
+
+TEST_F(ClobClientTest, FetchMarketParsesCapturedApiMarket) {
+    server_.enqueue({200, fixture(
+        "clob/market_0x004230fb1f54a139d50ba2041e062a01461c931a6725ce482e3a9ab61b2925bb.json")});
+
+    const auto market = client_->fetch_market(std::string(kActiveClobConditionId));
+
+    EXPECT_EQ(market.condition_id, kActiveClobConditionId);
+    EXPECT_TRUE(market.enable_order_book);
+    EXPECT_TRUE(market.active);
+    EXPECT_FALSE(market.closed);
+    ASSERT_EQ(market.tokens.size(), 2u);
+    EXPECT_EQ(market.tokens[0].token_id, kActiveClobTokenId);
+    EXPECT_EQ(server_.last_request().target, "/markets/" + std::string(kActiveClobConditionId));
+}
+
+TEST_F(ClobClientTest, FetchMarketByTokenParsesCapturedApiRelationship) {
+    server_.enqueue({200, fixture(
+        "clob/market_by_token_69422147515888934539342749343952767069189843320299332157580167457035825622340.json")});
+
+    const auto market = client_->fetch_market_by_token(std::string(kActiveClobTokenId));
+
+    EXPECT_EQ(market.condition_id, kActiveClobConditionId);
+    EXPECT_EQ(market.primary_token_id, kActiveClobNoTokenId);
+    EXPECT_EQ(market.secondary_token_id, kActiveClobTokenId);
+    EXPECT_EQ(server_.last_request().target,
+              "/markets-by-token/" + std::string(kActiveClobTokenId));
+}
+
+TEST_F(ClobClientTest, FetchMarketTradesEventsReturnsCapturedJson) {
+    server_.enqueue({200, fixture(
+        "clob/market_live_activity_0x004230fb1f54a139d50ba2041e062a01461c931a6725ce482e3a9ab61b2925bb.json")});
+
+    const auto activity = client_->fetch_market_trades_events(std::string(kActiveClobConditionId));
+
+    ASSERT_TRUE(activity.is_object());
+    EXPECT_EQ(boost::json::value_to<std::string>(activity.as_object().at("condition_id")),
+              kActiveClobConditionId);
+    EXPECT_EQ(server_.last_request().target,
+              "/markets/live-activity/" + std::string(kActiveClobConditionId));
+}
+
+TEST_F(ClobClientTest, FetchMarketsParsesCapturedPage) {
+    server_.enqueue({200, fixture("clob/markets_page.json")});
+
+    const auto page = client_->fetch_markets();
+
+    ASSERT_FALSE(page.data.empty());
+    EXPECT_EQ(page.count, page.data.size());
+    EXPECT_FALSE(page.next_cursor.empty());
+    EXPECT_EQ(server_.last_request().target, "/markets");
+}
+
+TEST_F(ClobClientTest, FetchSamplingMarketsParsesCapturedPage) {
+    server_.enqueue({200, fixture("clob/sampling_markets_page.json")});
+
+    const auto page = client_->fetch_sampling_markets();
+
+    ASSERT_FALSE(page.data.empty());
+    EXPECT_EQ(page.count, page.data.size());
+    EXPECT_FALSE(page.next_cursor.empty());
+    EXPECT_EQ(server_.last_request().target, "/sampling-markets");
+}
+
+TEST_F(ClobClientTest, FetchSimplifiedMarketsParsesCapturedPage) {
+    server_.enqueue({200, fixture("clob/simplified_markets_page.json")});
+
+    const auto page = client_->fetch_simplified_markets();
+
+    ASSERT_FALSE(page.data.empty());
+    EXPECT_EQ(page.count, page.data.size());
+    EXPECT_FALSE(page.next_cursor.empty());
+    EXPECT_EQ(server_.last_request().target, "/simplified-markets");
+}
+
+TEST_F(ClobClientTest, FetchSamplingSimplifiedMarketsParsesCapturedPage) {
+    server_.enqueue({200, fixture("clob/sampling_simplified_markets_page.json")});
+
+    const auto page = client_->fetch_sampling_simplified_markets();
+
+    ASSERT_FALSE(page.data.empty());
+    EXPECT_EQ(page.count, page.data.size());
+    EXPECT_FALSE(page.next_cursor.empty());
+    EXPECT_EQ(server_.last_request().target, "/sampling-simplified-markets");
+}
+
+TEST_F(ClobClientTest, FetchMarketsAppendsCursorWhenProvided) {
+    server_.enqueue({200, fixture("clob/markets_page_empty_lte.json")});
+
+    client_->fetch_markets("CURSOR");
+
+    EXPECT_EQ(server_.last_request().target, "/markets?next_cursor=CURSOR");
+}
+
+TEST_F(ClobClientTest, FetchAllMarketsDrainsCapturedPages) {
+    server_.enqueue({200, fixture("clob/markets_page.json")});
+    server_.enqueue({200, fixture("clob/markets_page_empty_lte.json")});
+
+    const auto markets = client_->fetch_all_markets();
+
+    ASSERT_FALSE(markets.empty());
+    ASSERT_EQ(server_.request_count(), 2u);
+    EXPECT_EQ(server_.requests()[0].target, "/markets");
+    EXPECT_EQ(server_.requests()[1].target, "/markets?next_cursor=MTAwMA==");
+}
+
+TEST_F(ClobClientTest, FetchAllSamplingMarketsDrainsCapturedPages) {
+    server_.enqueue({200, fixture("clob/sampling_markets_page.json")});
+    server_.enqueue({200, fixture("clob/markets_page_empty_lte.json")});
+
+    const auto markets = client_->fetch_all_sampling_markets();
+
+    ASSERT_FALSE(markets.empty());
+    ASSERT_EQ(server_.request_count(), 2u);
+    EXPECT_EQ(server_.requests()[0].target, "/sampling-markets");
+    EXPECT_EQ(server_.requests()[1].target, "/sampling-markets?next_cursor=MTAwMA==");
+}
+
+TEST_F(ClobClientTest, FetchAllSimplifiedMarketsDrainsCapturedPages) {
+    server_.enqueue({200, fixture("clob/simplified_markets_page.json")});
+    server_.enqueue({200, fixture("clob/simplified_markets_page_empty_lte.json")});
+
+    const auto markets = client_->fetch_all_simplified_markets();
+
+    ASSERT_FALSE(markets.empty());
+    ASSERT_EQ(server_.request_count(), 2u);
+    EXPECT_EQ(server_.requests()[0].target, "/simplified-markets");
+    EXPECT_EQ(server_.requests()[1].target, "/simplified-markets?next_cursor=MTAwMA==");
+}
+
+TEST_F(ClobClientTest, FetchAllSamplingSimplifiedMarketsDrainsCapturedPages) {
+    server_.enqueue({200, fixture("clob/sampling_simplified_markets_page.json")});
+    server_.enqueue({200, fixture("clob/simplified_markets_page_empty_lte.json")});
+
+    const auto markets = client_->fetch_all_sampling_simplified_markets();
+
+    ASSERT_FALSE(markets.empty());
+    ASSERT_EQ(server_.request_count(), 2u);
+    EXPECT_EQ(server_.requests()[0].target, "/sampling-simplified-markets");
+    EXPECT_EQ(server_.requests()[1].target,
+              "/sampling-simplified-markets?next_cursor=MTAwMA==");
+}
+
+TEST_F(ClobClientTest, CheckGeoblockUsesConfiguredPolymarketHostAndRestoresClobHost) {
+    server_.enqueue({200, fixture("clob/geoblock.json")});
+    server_.enqueue({200, fixture("clob/version.json")});
+
+    const auto geoblock = client_->check_geoblock();
+    const auto version = client_->fetch_version();
+
+    EXPECT_TRUE(geoblock.blocked);
+    EXPECT_EQ(geoblock.country, "US");
+    EXPECT_EQ(version, 1u);
+    ASSERT_EQ(server_.request_count(), 2u);
+    EXPECT_EQ(server_.requests()[0].target, "/api/geoblock");
+    EXPECT_EQ(server_.requests()[1].target, "/version");
+}
+
+TEST_F(ClobClientTest, FetchCurrentMakerRebatesTreatsCapturedNullAsEmpty) {
+    server_.enqueue({200, fixture("clob/maker_rebates_null.json")});
+
+    const auto rebates = client_->fetch_current_maker_rebates(
+        "2026-04-01", std::string(kPublicProfileAddress));
+
+    EXPECT_TRUE(rebates.empty());
+    EXPECT_EQ(server_.last_request().target,
+              "/rebates/current?date=2026-04-01&maker_address=" + std::string(kPublicProfileAddress));
+}
+
+class DataClientTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        server_.start();
+        config_.data_api_url = server_.base_url();
+        config_.http_timeout_ms = 2000;
+        client_ = std::make_unique<DataClient>(config_);
+    }
+
+    void TearDown() override {
+        client_.reset();
+        server_.stop();
+    }
+
+    MockHttpServer server_;
+    APIConfig config_;
+    std::unique_ptr<DataClient> client_;
+};
+
+TEST_F(DataClientTest, HealthParsesCapturedApiResponse) {
+    server_.enqueue({200, fixture("data/health.json")});
+
+    const auto health = client_->health();
+
+    EXPECT_EQ(health.data, "OK");
+    EXPECT_EQ(server_.last_request().method, "GET");
+    EXPECT_EQ(server_.last_request().target, "/");
+}
+
+TEST_F(DataClientTest, OpenInterestParsesCapturedApiResponse) {
+    server_.enqueue({200, fixture(
+        "data/open_interest_0x5eed579ff6763914d78a966c83473ba2485ac8910d0a0914eef6d9fcb33085de.json")});
+
+    polymarket::data::OpenInterestRequest req;
+    req.markets = {std::string(kClobConditionId)};
+    const auto open_interest = client_->open_interest(req);
+
+    ASSERT_EQ(open_interest.size(), 1u);
+    EXPECT_EQ(open_interest[0].market, kClobConditionId);
+    EXPECT_DOUBLE_EQ(open_interest[0].value, 0.0);
+    EXPECT_EQ(server_.last_request().target, "/oi?market=" + std::string(kClobConditionId));
+}
+
+TEST_F(DataClientTest, LiveVolumeParsesCapturedApiResponse) {
+    server_.enqueue({200, fixture("data/live_volume_2890.json")});
+
+    polymarket::data::LiveVolumeRequest req;
+    req.id = kLiveEventId;
+    const auto volumes = client_->live_volume(req);
+
+    ASSERT_EQ(volumes.size(), 1u);
+    EXPECT_DOUBLE_EQ(volumes[0].total, 0.0);
+    EXPECT_TRUE(volumes[0].markets.empty());
+    EXPECT_EQ(server_.last_request().target, "/live-volume?id=2890");
 }
 
 }  // namespace
