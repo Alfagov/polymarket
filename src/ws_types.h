@@ -171,6 +171,7 @@ namespace polymarket::ws {
 
     std::string serialize_subscription_request(const MarketSubscriptionRequest& request);
     std::string serialize_subscription_update(const MarketSubscriptionUpdate& update);
+    std::string market_event_type(const MarketEvent& event);
     MarketEvent parse_market_event(std::string_view message);
     std::vector<MarketEvent> parse_market_events(std::string_view message);
 

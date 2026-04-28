@@ -3,6 +3,7 @@
 //
 
 #include <curl/curl.h>
+#include <spdlog/spdlog.h>
 #include "http_client.h"
 
 namespace polymarket {
@@ -26,7 +27,7 @@ namespace polymarket {
     curl_(nullptr), headers_(nullptr), timeout_ms_(50000), dns_cache_timeout_(60),
     keepalive_timeout_(20), total_latency_ms_(0),
     total_requests_(0), reused_connections_(0),
-    last_latency_ms_(0), connection_warmed_(false)
+    last_latency_ms_(0), connection_warmed_(false), logger_(rest_logger())
     {
         init();
     }
@@ -40,7 +41,8 @@ namespace polymarket {
     timeout_ms_(other.timeout_ms_), dns_cache_timeout_(other.dns_cache_timeout_),
     keepalive_timeout_(other.keepalive_timeout_), total_requests_(other.total_requests_),
     reused_connections_(other.reused_connections_), total_latency_ms_(other.total_latency_ms_),
-    connection_warmed_(other.connection_warmed_), last_latency_ms_(other.last_latency_ms_)
+    connection_warmed_(other.connection_warmed_), last_latency_ms_(other.last_latency_ms_),
+    logger_(other.logger_)
     {
         other.curl_ = nullptr;
         other.headers_ = nullptr;
@@ -59,6 +61,7 @@ namespace polymarket {
             total_latency_ms_ = other.total_latency_ms_;
             last_latency_ms_ = other.last_latency_ms_;
             connection_warmed_ = other.connection_warmed_;
+            logger_ = other.logger_;
             other.curl_ = nullptr;
             other.headers_ = nullptr;
         }
@@ -140,6 +143,12 @@ namespace polymarket {
         }
     }
 
+    void HttpClient::set_log_level(LogLevel level) {
+        if (logger_) {
+            logger_->set_level(level);
+        }
+    }
+
     size_t HttpClient::write_callback(char *ptr, size_t size, size_t nmemb, void* userdata) {
         auto *response = static_cast<std::string*>(userdata);
         size_t len = size * nmemb;
@@ -147,9 +156,14 @@ namespace polymarket {
         return len;
     }
 
-    HttpResponse HttpClient::perform_request(const std::string& url) {
+    HttpResponse HttpClient::perform_request(std::string_view method, const std::string& url, size_t request_body_size) {
         HttpResponse response;
         response.status = 0;
+
+        SPDLOG_LOGGER_DEBUG(logger_, "{} {}", method, url);
+        if (request_body_size > 0) {
+            SPDLOG_LOGGER_TRACE(logger_, "{} request body: {} bytes", method, request_body_size);
+        }
 
         auto start = std::chrono::high_resolution_clock::now();
         curl_easy_setopt(curl_, CURLOPT_URL, url.c_str());
@@ -165,6 +179,8 @@ namespace polymarket {
 
         if (res != CURLE_OK) {
             response.error = curl_easy_strerror(res);
+            SPDLOG_LOGGER_ERROR(logger_, "{} {} failed after {:.3f} ms: {}", method, url,
+                                response.elapsed_ms, response.error);
             return response;
         }
 
@@ -183,6 +199,15 @@ namespace polymarket {
             }
         }
 
+        if (response.ok()) {
+            SPDLOG_LOGGER_INFO(logger_, "{} {} -> {} in {:.3f} ms ({} bytes)", method, url,
+                               response.status, response.elapsed_ms, response.body.size());
+        } else {
+            SPDLOG_LOGGER_WARN(logger_, "{} {} -> {} in {:.3f} ms ({} bytes)", method, url,
+                               response.status, response.elapsed_ms, response.body.size());
+        }
+        SPDLOG_LOGGER_TRACE(logger_, "{} response body: {}", method, std::string_view(response.body));
+
         return response;
     }
 
@@ -192,7 +217,7 @@ namespace polymarket {
         curl_easy_setopt(curl_, CURLOPT_HTTPGET, 1L);
         curl_easy_setopt(curl_, CURLOPT_POST, 0L);
 
-        return perform_request(url);
+        return perform_request("GET", url);
     }
 
     HttpResponse HttpClient::get(const std::string &path, const std::map<std::string, std::string> &headers) {
@@ -226,7 +251,7 @@ namespace polymarket {
         curl_easy_setopt(curl_, CURLOPT_POSTFIELDS, body.c_str());
         curl_easy_setopt(curl_, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
 
-        return perform_request(url);
+        return perform_request("POST", url, body.size());
     }
 
     HttpResponse HttpClient::post(const std::string &path, const std::string &body, const std::map<std::string, std::string> &headers) {
@@ -263,7 +288,7 @@ namespace polymarket {
             curl_easy_setopt(curl_, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
         }
 
-        auto response = perform_request(url);
+        auto response = perform_request("DELETE", url, body.size());
 
         curl_easy_setopt(curl_, CURLOPT_CUSTOMREQUEST, nullptr);
 

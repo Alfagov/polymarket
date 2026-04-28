@@ -6,9 +6,14 @@
 #define POLYMARKET_HTTP_CLIENT_H
 
 #include <map>
+#include <memory>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <curl/curl.h>
+#include <spdlog/logger.h>
+
+#include "logging.h"
 
 namespace polymarket {
     struct HttpResponse {
@@ -39,6 +44,7 @@ namespace polymarket {
         void set_user_agent(const std::string& user_agent);
         void set_dns_cache_timeout(int timeout_sec); // DNS TTL
         void set_keepalive_timeout(int timeout_sec); // Cache TTL
+        void set_log_level(LogLevel level);
 
         HttpResponse get(const std::string& path);
         HttpResponse get(const std::string& path, const std::map<std::string, std::string>& headers);
@@ -73,10 +79,11 @@ namespace polymarket {
         double last_latency_ms_;
         double total_latency_ms_;
         bool connection_warmed_;
+        std::shared_ptr<spdlog::logger> logger_;
 
         void init();
         void cleanup();
-        HttpResponse perform_request(const std::string& url);
+        HttpResponse perform_request(std::string_view method, const std::string& url, size_t request_body_size = 0);
 
         static size_t write_callback(char *ptr, size_t size, size_t nmemb, void* userdata);
     };

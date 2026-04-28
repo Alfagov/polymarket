@@ -24,11 +24,23 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(Boost)
 find_package(CURL REQUIRED)
 find_package(OpenSSL REQUIRED)
+find_package(spdlog CONFIG QUIET)
+if (NOT spdlog_FOUND)
+    FetchContent_Declare(
+            spdlog
+            URL https://github.com/gabime/spdlog/archive/refs/tags/v1.15.1.tar.gz
+    )
+    FetchContent_MakeAvailable(spdlog)
+endif()
+
+set(POLYMARKET_SPDLOG_ACTIVE_LEVEL "SPDLOG_LEVEL_TRACE" CACHE STRING
+        "Compile-time spdlog active level for polymarket REST logging")
 
 add_executable(polymarket main.cpp
         src/http_client.cpp
         src/http_client.h
-        src/http_client.h
+        src/logging.cpp
+        src/logging.h
         src/ws_client.cpp
         src/ws_client.h
         src/ws_types.h
@@ -45,9 +57,13 @@ add_executable(polymarket main.cpp
         src/data_client.h
         src/data_types.h)
 
+target_compile_definitions(polymarket PRIVATE
+        SPDLOG_ACTIVE_LEVEL=${POLYMARKET_SPDLOG_ACTIVE_LEVEL})
+
 target_link_libraries(polymarket PRIVATE
         OpenSSL::SSL
         OpenSSL::Crypto
+        spdlog::spdlog
         Boost::system
         CURL::libcurl
         Boost::headers
@@ -76,6 +92,8 @@ if (POLYMARKET_BUILD_TESTS)
             tests/test_gamma_client.cpp
             tests/test_ws_client.cpp
             src/http_client.cpp
+            src/logging.cpp
+            src/logging.h
             src/ws_client.cpp
             src/ws_client.h
             src/ws_types.h
@@ -89,12 +107,14 @@ if (POLYMARKET_BUILD_TESTS)
 
     target_include_directories(gamma_client_tests PRIVATE src tests)
     target_compile_definitions(gamma_client_tests PRIVATE
-            POLYMARKET_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
+            POLYMARKET_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
+            SPDLOG_ACTIVE_LEVEL=${POLYMARKET_SPDLOG_ACTIVE_LEVEL})
 
     target_link_libraries(gamma_client_tests PRIVATE
             GTest::gtest_main
             OpenSSL::SSL
             OpenSSL::Crypto
+            spdlog::spdlog
             Boost::system
             CURL::libcurl
             Boost::headers

@@ -12,15 +12,18 @@
 #include <chrono>
 #include <deque>
 #include <functional>
+#include <initializer_list>
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <boost/asio/ssl.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/ssl.hpp>
 #include <boost/beast/websocket.hpp>
+#include <spdlog/logger.h>
 
 namespace polymarket::ws {
 
@@ -36,6 +39,19 @@ namespace polymarket::ws {
     using CloseHandler = std::function<void(beast::error_code)>;
     using ErrorHandler = std::function<void(beast::error_code, std::string_view)>;
 
+    struct ListenMarketsOptions {
+        std::optional<bool> initial_dump = true;
+        std::optional<int> level = 2;
+        std::optional<bool> custom_feature_enabled = true;
+        bool heartbeat = true;
+
+        RawMessageHandler raw_message_handler;
+        MarketEventHandler market_event_handler;
+        OpenHandler open_handler;
+        CloseHandler close_handler;
+        ErrorHandler error_handler;
+    };
+
     class WsClient : public std::enable_shared_from_this<WsClient> {
     public:
         explicit WsClient(net::io_context& io_context, ssl::context& ssl_context);
@@ -48,6 +64,7 @@ namespace polymarket::ws {
         void close(websocket::close_reason reason = websocket::close_code::normal);
         void start_heartbeat(std::chrono::milliseconds interval, std::string message);
         void stop_heartbeat();
+        void set_log_level(LogLevel level);
 
         bool is_open() const { return connected_; }
 
@@ -89,6 +106,7 @@ namespace polymarket::ws {
         std::chrono::milliseconds heartbeat_interval_{10000};
         std::string heartbeat_message_ = "PING";
 
+        std::shared_ptr<spdlog::logger> logger_;
         RawMessageHandler message_handler_;
         OpenHandler open_handler_;
         CloseHandler close_handler_;
@@ -106,6 +124,10 @@ namespace polymarket::ws {
         MarketWsClient& operator=(const MarketWsClient&) = delete;
 
         void connect();
+        void listen_markets(const std::vector<std::string>& markets,
+                            ListenMarketsOptions opts = {});
+        void listen_markets(std::initializer_list<std::string> markets,
+                            ListenMarketsOptions opts = {});
         void send_text(std::string message);
         void subscribe(const MarketSubscriptionRequest& request);
         void update_subscription(const MarketSubscriptionUpdate& update);
@@ -120,12 +142,15 @@ namespace polymarket::ws {
         void set_open_handler(OpenHandler handler);
         void set_close_handler(CloseHandler handler);
         void set_error_handler(ErrorHandler handler);
+        void set_log_level(LogLevel level);
 
     private:
+        void install_default_handlers();
         void handle_message(std::string_view message);
 
         APIConfig config_;
         std::shared_ptr<WsClient> transport_;
+        std::shared_ptr<spdlog::logger> logger_;
         RawMessageHandler raw_message_handler_;
         MarketEventHandler market_event_handler_;
         ErrorHandler error_handler_;

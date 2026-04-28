@@ -108,6 +108,9 @@ namespace polymarket::clob {
     ClobClient::ClobClient(const APIConfig &config)
         : config_(config)
     {
+        if (config_.log_level.has_value()) {
+            http_.set_log_level(*config_.log_level);
+        }
         http_.set_base_url(config.clob_rest_url);
         http_.set_timeout(config_.http_timeout_ms);
     }

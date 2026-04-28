@@ -7,11 +7,13 @@
 #include <chrono>
 #include <stdexcept>
 #include <utility>
+#include <variant>
 
 #include <boost/json.hpp>
 #include <boost/url/parse.hpp>
 #include <boost/url/url_view.hpp>
 #include <openssl/err.h>
+#include <spdlog/spdlog.h>
 
 namespace json = boost::json;
 namespace urls = boost::urls;
@@ -233,6 +235,13 @@ namespace polymarket::ws {
         void put_optional(json::object& obj, std::string_view key, const std::optional<int>& value) {
             if (value) obj[key] = *value;
         }
+
+        template <class... Ts>
+        struct Overloaded : Ts... {
+            using Ts::operator()...;
+        };
+        template <class... Ts>
+        Overloaded(Ts...) -> Overloaded<Ts...>;
     }
 
     void tag_invoke(json::value_from_tag, json::value& jv,
@@ -262,6 +271,22 @@ namespace polymarket::ws {
 
     std::string serialize_subscription_update(const MarketSubscriptionUpdate& update) {
         return json::serialize(json::value_from(update));
+    }
+
+    std::string market_event_type(const MarketEvent& event) {
+        return std::visit(Overloaded{
+            [](const BookEvent&) { return std::string("book"); },
+            [](const PriceChangeEvent&) { return std::string("price_change"); },
+            [](const LastTradePriceEvent&) { return std::string("last_trade_price"); },
+            [](const TickSizeChangeEvent&) { return std::string("tick_size_change"); },
+            [](const BestBidAskEvent&) { return std::string("best_bid_ask"); },
+            [](const NewMarketEvent&) { return std::string("new_market"); },
+            [](const MarketResolvedEvent&) { return std::string("market_resolved"); },
+            [](const PongEvent&) { return std::string("PONG"); },
+            [](const UnknownEvent& ev) {
+                return ev.event_type.empty() ? std::string("unknown") : ev.event_type;
+            },
+        }, event);
     }
 
     MarketEvent parse_market_event(std::string_view message) {
@@ -297,14 +322,17 @@ namespace polymarket::ws {
     WsClient::WsClient(net::io_context& io_context, ssl::context& ssl_context)
         : resolver_(net::make_strand(io_context)),
           ws_(net::make_strand(io_context), ssl_context),
-          heartbeat_timer_(ws_.get_executor()) {}
+          heartbeat_timer_(ws_.get_executor()),
+          logger_(market_ws_logger()) {}
 
     void WsClient::connect(const std::string& url) {
+        SPDLOG_LOGGER_INFO(logger_, "connecting websocket {}", url);
         net::dispatch(ws_.get_executor(),
                       [self = shared_from_this(), url] { self->do_connect(url); });
     }
 
     void WsClient::send_text(std::string message) {
+        SPDLOG_LOGGER_TRACE(logger_, "queue websocket text: {}", std::string_view(message));
         net::post(ws_.get_executor(),
                   [self = shared_from_this(), message = std::move(message)]() mutable {
                       self->write_queue_.push_back(std::move(message));
@@ -313,6 +341,7 @@ namespace polymarket::ws {
     }
 
     void WsClient::close(websocket::close_reason reason) {
+        SPDLOG_LOGGER_INFO(logger_, "closing websocket");
         net::post(ws_.get_executor(), [self = shared_from_this(), reason] {
             if (self->closing_) return;
             self->closing_ = true;
@@ -330,6 +359,7 @@ namespace polymarket::ws {
     }
 
     void WsClient::start_heartbeat(std::chrono::milliseconds interval, std::string message) {
+        SPDLOG_LOGGER_DEBUG(logger_, "starting websocket heartbeat every {} ms", interval.count());
         net::post(ws_.get_executor(),
                   [self = shared_from_this(), interval, message = std::move(message)]() mutable {
                       self->do_stop_heartbeat();
@@ -341,9 +371,16 @@ namespace polymarket::ws {
     }
 
     void WsClient::stop_heartbeat() {
+        SPDLOG_LOGGER_DEBUG(logger_, "stopping websocket heartbeat");
         net::post(ws_.get_executor(), [self = shared_from_this()] {
             self->do_stop_heartbeat();
         });
+    }
+
+    void WsClient::set_log_level(LogLevel level) {
+        if (logger_) {
+            logger_->set_level(level);
+        }
     }
 
     void WsClient::do_stop_heartbeat() {
@@ -369,6 +406,8 @@ namespace polymarket::ws {
         target_ = view.encoded_target().empty() ? "/" : std::string(view.encoded_target());
         handshake_host_ = host_;
         if (view.has_port()) handshake_host_ += ":" + port_;
+        SPDLOG_LOGGER_DEBUG(logger_, "websocket target host={} port={} target={}",
+                            host_, port_, target_);
 
         if (!SSL_set_tlsext_host_name(ws_.next_layer().native_handle(), host_.c_str())) {
             beast::error_code ec{
@@ -388,6 +427,7 @@ namespace polymarket::ws {
     void WsClient::on_resolve(beast::error_code ec, tcp::resolver::results_type results) {
         if (ec) return notify_error(ec, "resolve");
 
+        SPDLOG_LOGGER_DEBUG(logger_, "websocket resolved {} endpoints", results.size());
         beast::get_lowest_layer(ws_).expires_after(std::chrono::seconds(30));
         beast::get_lowest_layer(ws_).async_connect(
             results,
@@ -397,6 +437,7 @@ namespace polymarket::ws {
     void WsClient::on_connect(beast::error_code ec, tcp::resolver::results_type::endpoint_type) {
         if (ec) return notify_error(ec, "connect");
 
+        SPDLOG_LOGGER_DEBUG(logger_, "websocket TCP connected");
         ws_.next_layer().async_handshake(
             ssl::stream_base::client,
             beast::bind_front_handler(&WsClient::on_ssl_handshake, shared_from_this()));
@@ -405,6 +446,7 @@ namespace polymarket::ws {
     void WsClient::on_ssl_handshake(beast::error_code ec) {
         if (ec) return notify_error(ec, "ssl handshake");
 
+        SPDLOG_LOGGER_DEBUG(logger_, "websocket TLS handshake complete");
         beast::get_lowest_layer(ws_).expires_never();
         ws_.set_option(websocket::stream_base::timeout::suggested(beast::role_type::client));
         ws_.set_option(websocket::stream_base::decorator(
@@ -423,6 +465,7 @@ namespace polymarket::ws {
         if (ec) return notify_error(ec, "websocket handshake");
 
         connected_ = true;
+        SPDLOG_LOGGER_INFO(logger_, "websocket open {}{}", handshake_host_, target_);
         if (open_handler_) open_handler_();
         do_write();
         do_read();
@@ -437,6 +480,7 @@ namespace polymarket::ws {
     void WsClient::on_read(beast::error_code ec, std::size_t) {
         if (ec == websocket::error::closed) {
             connected_ = false;
+            SPDLOG_LOGGER_INFO(logger_, "websocket closed by peer");
             if (close_handler_) close_handler_(ec);
             return;
         }
@@ -444,6 +488,7 @@ namespace polymarket::ws {
 
         const std::string message = beast::buffers_to_string(buffer_.data());
         buffer_.consume(buffer_.size());
+        SPDLOG_LOGGER_TRACE(logger_, "websocket read {} bytes: {}", message.size(), std::string_view(message));
 
         if (message_handler_) message_handler_(message);
         do_read();
@@ -454,6 +499,7 @@ namespace polymarket::ws {
 
         writing_ = true;
         ws_.text(true);
+        SPDLOG_LOGGER_TRACE(logger_, "websocket write {} bytes", write_queue_.front().size());
         ws_.async_write(
             net::buffer(write_queue_.front()),
             beast::bind_front_handler(&WsClient::on_write, shared_from_this()));
@@ -474,6 +520,9 @@ namespace polymarket::ws {
         connected_ = false;
         closing_ = false;
         do_stop_heartbeat();
+        if (!ec) {
+            SPDLOG_LOGGER_INFO(logger_, "websocket closed");
+        }
         if (ec) notify_error(ec, "close");
         if (close_handler_) close_handler_(ec);
     }
@@ -484,12 +533,18 @@ namespace polymarket::ws {
         heartbeat_timer_.expires_after(heartbeat_interval_);
         heartbeat_timer_.async_wait([self = shared_from_this()](beast::error_code ec) {
             if (ec || !self->heartbeat_enabled_) return;
+            SPDLOG_LOGGER_TRACE(self->logger_, "websocket heartbeat");
             self->send_text(self->heartbeat_message_);
             self->schedule_heartbeat();
         });
     }
 
     void WsClient::notify_error(beast::error_code ec, std::string_view where) {
+        if (ec) {
+            SPDLOG_LOGGER_ERROR(logger_, "websocket {} failed: {}", where, ec.message());
+        } else {
+            SPDLOG_LOGGER_ERROR(logger_, "websocket {}", where);
+        }
         if (error_handler_) error_handler_(ec, where);
     }
 
@@ -497,7 +552,12 @@ namespace polymarket::ws {
                                    ssl::context& ssl_context,
                                    APIConfig config)
         : config_(std::move(config)),
-          transport_(std::make_shared<WsClient>(io_context, ssl_context)) {
+          transport_(std::make_shared<WsClient>(io_context, ssl_context)),
+          logger_(market_ws_logger()) {
+        if (config_.log_level.has_value()) {
+            set_log_level(*config_.log_level);
+        }
+        install_default_handlers();
         transport_->set_message_handler([this](std::string_view message) {
             handle_message(message);
         });
@@ -515,15 +575,60 @@ namespace polymarket::ws {
         transport_->connect(config_.clob_ws_url);
     }
 
+    void MarketWsClient::listen_markets(const std::vector<std::string>& markets,
+                                        ListenMarketsOptions opts) {
+        if (markets.empty()) {
+            SPDLOG_LOGGER_WARN(logger_, "listen_markets called with no markets");
+        }
+
+        if (opts.raw_message_handler) set_raw_message_handler(std::move(opts.raw_message_handler));
+        if (opts.market_event_handler) set_market_event_handler(std::move(opts.market_event_handler));
+        if (opts.close_handler) set_close_handler(std::move(opts.close_handler));
+        if (opts.error_handler) set_error_handler(std::move(opts.error_handler));
+
+        const MarketSubscriptionRequest request{
+            .assets_ids = markets,
+            .initial_dump = opts.initial_dump,
+            .level = opts.level,
+            .custom_feature_enabled = opts.custom_feature_enabled,
+        };
+
+        OpenHandler user_open_handler = std::move(opts.open_handler);
+        const bool start_heartbeat_on_open = opts.heartbeat;
+        set_open_handler([this, request, start_heartbeat_on_open,
+                          user_open_handler = std::move(user_open_handler)]() mutable {
+            SPDLOG_LOGGER_INFO(logger_, "subscribing to {} market assets", request.assets_ids.size());
+            subscribe(request);
+            if (start_heartbeat_on_open) {
+                start_heartbeat();
+            }
+            if (user_open_handler) {
+                user_open_handler();
+            }
+        });
+
+        connect();
+    }
+
+    void MarketWsClient::listen_markets(std::initializer_list<std::string> markets,
+                                        ListenMarketsOptions opts) {
+        listen_markets(std::vector<std::string>(markets), std::move(opts));
+    }
+
     void MarketWsClient::send_text(std::string message) {
         transport_->send_text(std::move(message));
     }
 
     void MarketWsClient::subscribe(const MarketSubscriptionRequest& request) {
+        SPDLOG_LOGGER_INFO(logger_, "sending market subscription for {} assets", request.assets_ids.size());
+        SPDLOG_LOGGER_DEBUG(logger_, "market subscription: {}", serialize_subscription_request(request));
         transport_->send_text(serialize_subscription_request(request));
     }
 
     void MarketWsClient::update_subscription(const MarketSubscriptionUpdate& update) {
+        SPDLOG_LOGGER_INFO(logger_, "sending market subscription update {} for {} assets",
+                           to_string(update.operation), update.assets_ids.size());
+        SPDLOG_LOGGER_DEBUG(logger_, "market subscription update: {}", serialize_subscription_update(update));
         transport_->send_text(serialize_subscription_update(update));
     }
 
@@ -535,6 +640,7 @@ namespace polymarket::ws {
     }
 
     void MarketWsClient::ping() {
+        SPDLOG_LOGGER_TRACE(logger_, "sending market websocket ping");
         transport_->send_text("PING");
     }
 
@@ -565,10 +671,46 @@ namespace polymarket::ws {
         transport_->set_error_handler(error_handler_);
     }
 
+    void MarketWsClient::set_log_level(LogLevel level) {
+        if (logger_) {
+            logger_->set_level(level);
+        }
+        transport_->set_log_level(level);
+    }
+
+    void MarketWsClient::install_default_handlers() {
+        raw_message_handler_ = [logger = logger_](std::string_view message) {
+            SPDLOG_LOGGER_TRACE(logger, "market websocket raw: {}", message);
+        };
+        market_event_handler_ = [logger = logger_](const MarketEvent& event) {
+            SPDLOG_LOGGER_DEBUG(logger, "market websocket event {}", market_event_type(event));
+        };
+        error_handler_ = [logger = logger_](beast::error_code ec, std::string_view where) {
+            if (ec) {
+                SPDLOG_LOGGER_ERROR(logger, "market websocket {}: {}", where, ec.message());
+            } else {
+                SPDLOG_LOGGER_ERROR(logger, "market websocket {}", where);
+            }
+        };
+        transport_->set_open_handler([logger = logger_] {
+            SPDLOG_LOGGER_INFO(logger, "market websocket open");
+        });
+        transport_->set_close_handler([logger = logger_](beast::error_code ec) {
+            if (ec) {
+                SPDLOG_LOGGER_WARN(logger, "market websocket closed: {}", ec.message());
+            } else {
+                SPDLOG_LOGGER_INFO(logger, "market websocket closed");
+            }
+        });
+        transport_->set_error_handler(error_handler_);
+    }
+
     void MarketWsClient::handle_message(std::string_view message) {
         if (raw_message_handler_) raw_message_handler_(message);
 
-        for (const auto& event : parse_market_events(message)) {
+        const auto events = parse_market_events(message);
+        SPDLOG_LOGGER_TRACE(logger_, "parsed {} market websocket events", events.size());
+        for (const auto& event : events) {
             if (const auto* unknown_event = std::get_if<UnknownEvent>(&event);
                 unknown_event && !unknown_event->error.empty() && error_handler_) {
                 error_handler_({}, unknown_event->error);

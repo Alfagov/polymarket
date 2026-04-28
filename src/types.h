@@ -4,8 +4,11 @@
 
 #ifndef POLYMARKET_TYPES_H
 #define POLYMARKET_TYPES_H
+#include <optional>
 #include <string>
 #include <vector>
+
+#include "logging.h"
 
 namespace polymarket {
 
@@ -20,6 +23,7 @@ namespace polymarket {
         int ws_ping_interval_ms = 10000;
         int http_timeout_ms = 5000;
         int max_markets = 50;
+        std::optional<LogLevel> log_level = std::nullopt;
 
         inline uint64_t now_ns() {
             return std::chrono::duration_cast<std::chrono::nanoseconds>(

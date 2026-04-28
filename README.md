@@ -34,6 +34,7 @@ Prerequisites:
 - CMake
 - `libcurl`
 - OpenSSL
+- spdlog (found with `find_package`, or fetched by CMake if missing)
 
 Build and run:
 
@@ -63,6 +64,47 @@ config.data_api_url = "https://data-api.polymarket.com";
 config.polymarket_url = "https://polymarket.com";
 config.http_timeout_ms = 5000;
 ```
+
+REST logging is off by default. Enable it globally:
+
+```cpp
+polymarket::set_log_level(polymarket::LogLevel::info);
+```
+
+Or set it from a client config before construction:
+
+```cpp
+polymarket::APIConfig config;
+config.log_level = polymarket::LogLevel::debug;
+polymarket::gamma::GammaClient gamma(config);
+```
+
+The REST client logs request completion at `info`, non-2xx responses at `warn`,
+curl failures at `error`, request starts at `debug`, and response bodies at
+`trace`. The market WebSocket client uses the same `APIConfig::log_level` and
+global `set_log_level` controls, with connection/subscription lifecycle logs at
+`info`/`debug` and raw frames at `trace`. Disabled levels are guarded before
+formatting through spdlog macros.
+
+Market websocket listening can be started with one call. The `markets` argument
+is the CLOB token/asset ids used by the market channel:
+
+```cpp
+boost::asio::io_context io;
+boost::asio::ssl::context ssl{boost::asio::ssl::context::tls_client};
+
+polymarket::ws::MarketWsClient ws{io, ssl, config};
+ws.listen_markets({"token-id-a", "token-id-b"}, {
+    .market_event_handler = [](const polymarket::ws::MarketEvent& event) {
+        std::cout << polymarket::ws::market_event_type(event) << "\n";
+    },
+});
+io.run();
+```
+
+`listen_markets` connects, subscribes on open, and starts heartbeat by default.
+If you do not provide handlers, default handlers log open/close/error/raw/event
+activity through spdlog.
 
 Tests override these URLs with the local mock server so captured fixtures can exercise parsing and request construction deterministically.
 
