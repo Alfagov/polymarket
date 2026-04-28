@@ -31,6 +31,7 @@ add_executable(polymarket main.cpp
         src/http_client.h
         src/ws_client.cpp
         src/ws_client.h
+        src/ws_types.h
         src/gamma_client.cpp
         src/gamma_client.h
         src/types.h
@@ -73,7 +74,11 @@ if (POLYMARKET_BUILD_TESTS)
 
     add_executable(gamma_client_tests
             tests/test_gamma_client.cpp
+            tests/test_ws_client.cpp
             src/http_client.cpp
+            src/ws_client.cpp
+            src/ws_client.h
+            src/ws_types.h
             src/gamma_client.cpp
             src/clob_client.cpp
             src/clob_client.h

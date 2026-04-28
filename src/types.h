@@ -17,7 +17,7 @@ namespace polymarket {
         std::string data_api_url = "https://data-api.polymarket.com";
         std::string rtds_ws_url = "wss://ws-live-data.polymarket.com";
 
-        int ws_ping_interval_ms = 5000;
+        int ws_ping_interval_ms = 10000;
         int http_timeout_ms = 5000;
         int max_markets = 50;
 
